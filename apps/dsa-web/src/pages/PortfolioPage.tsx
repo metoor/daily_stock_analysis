@@ -8,6 +8,7 @@ import { getParsedApiError } from '../api/error';
 import { ApiErrorAlert, Card, Badge, ConfirmDialog, EmptyState, InlineAlert } from '../components/common';
 import { PortfolioSignalSummary } from '../components/decision-signals/DecisionSignalDisplay';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
+import { useColorScheme } from '../hooks/useColorScheme';
 import { formatUiText } from '../i18n/uiText';
 import { PORTFOLIO_TEXT } from '../locales/featureText';
 import type { FxRefreshFeedback } from '../utils/portfolioFormat';
@@ -181,6 +182,7 @@ async function loadPortfolioSignalLookup(lookup: PortfolioSignalLookup): Promise
 
 const PortfolioPage: React.FC = () => {
   const { language, t } = useUiLanguage();
+  const { riseClass, fallClass } = useColorScheme();
   const text = PORTFOLIO_TEXT[language];
   const decisionActionLabels = useMemo(() => buildDecisionActionLabelMap(t), [t]);
 
@@ -1232,8 +1234,8 @@ const PortfolioPage: React.FC = () => {
                         className={`py-2 pr-3 text-right ${
                           hasPositionPrice(row)
                             ? row.unrealizedPnlBase >= 0
-                              ? 'text-success'
-                              : 'text-danger'
+                              ? riseClass
+                              : fallClass
                             : 'text-secondary'
                         }`}
                       >
@@ -1243,8 +1245,8 @@ const PortfolioPage: React.FC = () => {
                         className={`py-2 pr-3 text-right ${
                           hasPositionPrice(row) && row.unrealizedPnlPct !== null && row.unrealizedPnlPct !== undefined
                             ? row.unrealizedPnlPct >= 0
-                              ? 'text-success'
-                              : 'text-danger'
+                              ? riseClass
+                              : fallClass
                             : 'text-secondary'
                         }`}
                       >

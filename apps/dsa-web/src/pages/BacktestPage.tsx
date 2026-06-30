@@ -6,6 +6,7 @@ import type { ParsedApiError } from '../api/error';
 import { getParsedApiError } from '../api/error';
 import { ApiErrorAlert, Card, Badge, EmptyState, Pagination, StatusDot, Tooltip } from '../components/common';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
+import { useColorScheme } from '../hooks/useColorScheme';
 import { formatUiText, type UiLanguage } from '../i18n/uiText';
 import {
   BACKTEST_DIRECTION_EXPECTED_LABELS,
@@ -245,6 +246,7 @@ const RunSummary: React.FC<{ data: BacktestRunResponse; language: UiLanguage }> 
 
 const BacktestPage: React.FC = () => {
   const { language, t } = useUiLanguage();
+  const { riseClass, fallClass } = useColorScheme();
   const text = BACKTEST_TEXT[language];
   const phaseFilterOptions = BACKTEST_PHASE_FILTER_OPTIONS[language];
   const actionLabels = buildDecisionActionLabelMap(t);
@@ -681,7 +683,7 @@ const BacktestPage: React.FC = () => {
                               {actualMovementBadge(row.actualMovement, language)}
                               <span className={
                                 row.actualReturnPct != null
-                                  ? row.actualReturnPct > 0 ? 'text-success' : row.actualReturnPct < 0 ? 'text-danger' : 'text-secondary-text'
+                                  ? row.actualReturnPct > 0 ? riseClass : row.actualReturnPct < 0 ? fallClass : 'text-secondary-text'
                                   : 'text-muted-text'
                               }>
                                 {pct(row.actualReturnPct)}

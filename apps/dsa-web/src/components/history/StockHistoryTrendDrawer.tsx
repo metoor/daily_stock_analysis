@@ -12,6 +12,7 @@ import { formatDateTime } from '../../utils/format';
 import { Badge, Button, Card } from '../common';
 import { DashboardStateBlock } from '../dashboard';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
+import { useColorScheme } from '../../hooks/useColorScheme';
 import type { UiTextKey } from '../../i18n/uiText';
 
 interface StockHistoryTrendDrawerProps {
@@ -53,13 +54,6 @@ const formatChangePct = (value?: number): string => {
 const formatHistoryTime = (value?: string | null): string => {
   const formatted = formatDateTime(value);
   return formatted.length > 11 ? formatted.slice(5) : formatted;
-};
-
-const getPriceChangeStyle = (value?: number): React.CSSProperties | undefined => {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) {
-    return undefined;
-  }
-  return { color: value > 0 ? 'var(--home-price-up)' : 'var(--home-price-down)' };
 };
 
 const formatModelName = (value: string | undefined, t: (key: UiTextKey, params?: Record<string, string | number>) => string): string => {
@@ -187,6 +181,7 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
   onRetry,
 }) => {
   const { t } = useUiLanguage();
+  const { riseClass, fallClass } = useColorScheme();
   const currentRecordId = report.meta.id;
   const [selectedRecordId, setSelectedRecordId] = useState(currentRecordId);
   const actionLabels = useMemo(() => buildDecisionActionLabelMap(t), [t]);
@@ -353,7 +348,7 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
                         <td className="px-3 py-3 font-mono text-secondary-text">
                           {formatNumber(item.currentPrice, 2)}
                         </td>
-                        <td className="px-3 py-3 font-mono font-semibold" style={getPriceChangeStyle(item.changePct)}>
+                        <td className={`px-3 py-3 font-mono font-semibold ${item.changePct != null && item.changePct !== 0 ? (item.changePct > 0 ? riseClass : fallClass) : ''}`}>
                           {formatChangePct(item.changePct)}
                         </td>
                         <td className="px-3 py-3 font-mono text-secondary-text">

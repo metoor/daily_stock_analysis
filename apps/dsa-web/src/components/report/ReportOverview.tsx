@@ -9,6 +9,7 @@ import { formatDateTime } from '../../utils/format';
 import { getMarketPhaseSummaryLabel, getPartialBarLabel } from '../../utils/marketPhase';
 import { getReportText, normalizeReportLanguage } from '../../utils/reportLanguage';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
+import { useColorScheme } from '../../hooks/useColorScheme';
 
 interface ReportOverviewProps {
   meta: ReportMeta;
@@ -166,6 +167,7 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
   watchlist,
 }) => {
   const { t } = useUiLanguage();
+  const { riseClass, fallClass, scheme } = useColorScheme();
   const reportLanguage = normalizeReportLanguage(meta.reportLanguage);
   const text = getReportText(reportLanguage);
   const marketPhaseLabel = getMarketPhaseSummaryLabel(meta.marketPhaseSummary, reportLanguage);
@@ -177,20 +179,9 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
   const boardSignals = buildBoardSignalMaps(details);
   const preparedRelatedBoards = buildPreparedRelatedBoards(relatedBoards, boardSignals);
 
-  const getPriceChangeStyle = (changePct: number | undefined): React.CSSProperties | undefined => {
-    if (changePct === undefined || changePct === null) {
-      return undefined;
-    }
-
-    if (changePct > 0) {
-      return { color: 'var(--home-price-up)' };
-    }
-
-    if (changePct < 0) {
-      return { color: 'var(--home-price-down)' };
-    }
-
-    return undefined;
+  const priceChangeClass = (changePct: number | undefined): string => {
+    if (changePct === undefined || changePct === null || changePct === 0) return '';
+    return changePct > 0 ? riseClass : fallClass;
   };
 
   const formatChangePct = (changePct: number | undefined): string => {
@@ -206,11 +197,10 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
     return text.laggingBoard;
   };
 
-  const getBoardStatusVariant = (status: BoardStatus): 'success' | 'danger' => {
-    if (status === 'leading') {
-      return 'success';
-    }
-    return 'danger';
+  const boardStatusVariant = (status: BoardStatus): 'success' | 'danger' => {
+    const riseVariant = scheme === 'red_up' ? 'danger' as const : 'success' as const;
+    const fallVariant = scheme === 'red_up' ? 'success' as const : 'danger' as const;
+    return status === 'leading' ? riseVariant : fallVariant;
   };
 
   const renderBoardChip = (board: PreparedBoard) => (
@@ -223,7 +213,7 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
       </span>
       {board.signal && (
         <Badge
-          variant={getBoardStatusVariant(board.signal.status)}
+          variant={boardStatusVariant(board.signal.status)}
           className="home-board-status-badge shadow-none"
         >
           {getBoardStatusLabel(board.signal.status)}
@@ -231,8 +221,7 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
       )}
       {board.signal && board.signal.changePct !== undefined && board.signal.changePct !== null && (
         <span
-          className="text-xs font-mono"
-          style={getPriceChangeStyle(board.signal.changePct)}
+          className={`text-xs font-mono ${priceChangeClass(board.signal.changePct)}`}
         >
           {formatChangePct(board.signal.changePct)}
         </span>
@@ -257,10 +246,10 @@ export const ReportOverview: React.FC<ReportOverviewProps> = ({
                   {/* 价格和涨跌幅 */}
                   {meta.currentPrice != null && (
                     <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold font-mono" style={getPriceChangeStyle(meta.changePct)}>
+                      <span className={`text-xl font-bold font-mono ${priceChangeClass(meta.changePct)}`}>
                         {meta.currentPrice.toFixed(2)}
                       </span>
-                      <span className="text-sm font-semibold font-mono" style={getPriceChangeStyle(meta.changePct)}>
+                      <span className={`text-sm font-semibold font-mono ${priceChangeClass(meta.changePct)}`}>
                         {formatChangePct(meta.changePct)}
                       </span>
                     </div>

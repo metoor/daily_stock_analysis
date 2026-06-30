@@ -38,6 +38,7 @@ import {
   type AlphaSiftStrategy,
 } from '../api/alphasift';
 import { formatParsedApiError, getParsedApiError, toApiErrorMessage, type ParsedApiError } from '../api/error';
+import { useColorScheme } from '../hooks/useColorScheme';
 import { AppPage, Button, InlineAlert } from '../components/common';
 
 const MARKETS = [{ id: 'cn', label: 'A 股' }];
@@ -385,11 +386,12 @@ const formatHotspotUpdatedAt = (value: string | null) => {
   });
 };
 
-const getHotspotStrength = (item: AlphaSiftHotspot, index: number) => {
+const getHotspotStrength = (item: AlphaSiftHotspot, index: number, riseClassName: string) => {
   const heat = Number(item.heatScore ?? 0);
   const changePct = Number(item.changePct ?? 0);
   if (index === 0 || heat >= 90 || changePct >= 8) {
-    return { label: '强势领先', className: 'bg-red-500/10 text-red-500' };
+    const bgClass = riseClassName === 'text-danger' ? 'bg-danger/10' : 'bg-success/10';
+    return { label: '强势领先', className: `${bgClass} ${riseClassName}` };
   }
   if (heat >= 80 || changePct >= 5) {
     return { label: '强势', className: 'bg-blue-500/10 text-blue-500' };
@@ -435,6 +437,7 @@ const MiniSparkline: React.FC<{ score?: number | null; selected?: boolean }> = (
 
 const StockScreeningPage: React.FC = () => {
   const navigate = useNavigate();
+  const { riseClass } = useColorScheme();
   const [restoredTask] = useState<PersistedScreenTask | null>(() => readPersistedScreenTask());
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(false);
@@ -946,7 +949,7 @@ const StockScreeningPage: React.FC = () => {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {hotspots.map((item, index) => {
               const selected = selectedHotspotTopic === item.topic;
-              const strength = getHotspotStrength(item, index);
+              const strength = getHotspotStrength(item, index, riseClass);
               const iconMeta = getHotspotIcon(item.name || item.topic);
               const Icon = iconMeta.icon;
               return (
