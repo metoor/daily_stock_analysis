@@ -51,6 +51,7 @@ const HomePage: React.FC = () => {
   const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
   const [showMarketReviewConfirm, setShowMarketReviewConfirm] = useState(false);
   const [showRerunMarketReviewConfirm, setShowRerunMarketReviewConfirm] = useState(false);
+  const [showReanalyzeConfirm, setShowReanalyzeConfirm] = useState(false);
   const [isSubmittingMarketReview, setIsSubmittingMarketReview] = useState(false);
   const [marketReviewNotice, setMarketReviewNotice] = useState<MarketReviewNotice>(null);
   const [marketReviewError, setMarketReviewError] = useState<ParsedApiError | null>(null);
@@ -946,7 +947,7 @@ const HomePage: React.FC = () => {
                         variant="home-action-ai"
                         size="sm"
                         disabled={isAnalyzing || selectedReport.meta.id === undefined}
-                        onClick={handleReanalyze}
+                        onClick={() => setShowReanalyzeConfirm(true)}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1104,6 +1105,14 @@ const HomePage: React.FC = () => {
         message={t('home.rerunMarketReviewConfirmMessage')}
         onConfirm={() => { setShowRerunMarketReviewConfirm(false); void handleTriggerMarketReview(); }}
         onCancel={() => setShowRerunMarketReviewConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showReanalyzeConfirm}
+        title={t('home.reanalyzeConfirmTitle')}
+        message={t('home.reanalyzeConfirmMessage')}
+        onConfirm={() => { setShowReanalyzeConfirm(false); handleReanalyze(); }}
+        onCancel={() => setShowReanalyzeConfirm(false)}
       />
 
     </div>

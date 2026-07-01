@@ -192,6 +192,8 @@ const zh = {
   'home.marketReviewConfirmMessage': '确认执行大盘复盘？复盘过程可能需要几分钟。',
   'home.rerunMarketReviewConfirmTitle': '重新复盘确认',
   'home.rerunMarketReviewConfirmMessage': '确认重新执行大盘复盘？将覆盖当前复盘结果。',
+  'home.reanalyzeConfirmTitle': '重新分析确认',
+  'home.reanalyzeConfirmMessage': '确认重新分析？将消耗 LLM token 并覆盖当前分析结果。',
   'home.taskStatus': '任务状态：{status}（{progress}）',
   'home.unknownTaskStatus': '收到未知任务状态：{status}',
 
@@ -945,6 +947,8 @@ const en: Record<UiTextKey, string> = {
   'home.marketReviewConfirmMessage': 'Run market review? This may take a few minutes.',
   'home.rerunMarketReviewConfirmTitle': 'Confirm Rerun',
   'home.rerunMarketReviewConfirmMessage': 'Rerun market review? This will overwrite the current result.',
+  'home.reanalyzeConfirmTitle': 'Confirm Reanalyze',
+  'home.reanalyzeConfirmMessage': 'Reanalyze? This will consume LLM tokens and overwrite the current result.',
   'home.taskStatus': 'Task status: {status} ({progress})',
   'home.unknownTaskStatus': 'Received unknown task status: {status}',
 
