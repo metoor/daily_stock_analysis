@@ -7,7 +7,7 @@ import { analysisApi } from '../api/analysis';
 import { historyApi } from '../api/history';
 import { agentApi, type SkillInfo } from '../api/agent';
 import { systemConfigApi } from '../api/systemConfig';
-import { ApiErrorAlert, Button, Drawer, EmptyState, InlineAlert } from '../components/common';
+import { ApiErrorAlert, Button, ConfirmDialog, Drawer, EmptyState, InlineAlert } from '../components/common';
 import { DashboardStateBlock } from '../components/dashboard';
 import { StockAutocomplete } from '../components/StockAutocomplete';
 import { StockHistoryTrendDrawer, StockBar } from '../components/history';
@@ -48,6 +48,9 @@ const HomePage: React.FC = () => {
   const location = useLocation();
   const { language: uiLanguage, t } = useUiLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAnalyzeConfirm, setShowAnalyzeConfirm] = useState(false);
+  const [showMarketReviewConfirm, setShowMarketReviewConfirm] = useState(false);
+  const [showRerunMarketReviewConfirm, setShowRerunMarketReviewConfirm] = useState(false);
   const [isSubmittingMarketReview, setIsSubmittingMarketReview] = useState(false);
   const [marketReviewNotice, setMarketReviewNotice] = useState<MarketReviewNotice>(null);
   const [marketReviewError, setMarketReviewError] = useState<ParsedApiError | null>(null);
@@ -787,7 +790,7 @@ const HomePage: React.FC = () => {
                 size="md"
                 isLoading={isSubmittingMarketReview}
                 loadingText={t('home.submitMarketReview')}
-                onClick={() => void handleTriggerMarketReview()}
+                onClick={() => setShowMarketReviewConfirm(true)}
                 className="h-10 flex-1 whitespace-nowrap md:flex-none"
               >
                 <BarChart3 className="h-4 w-4" aria-hidden="true" />
@@ -795,7 +798,7 @@ const HomePage: React.FC = () => {
               </Button>
               <button
                 type="button"
-                onClick={() => handleSubmitAnalysis()}
+                onClick={() => setShowAnalyzeConfirm(true)}
                 disabled={!query || isAnalyzing}
                 className="btn-primary flex h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap md:flex-none"
               >
@@ -969,7 +972,7 @@ const HomePage: React.FC = () => {
                       disabled={isSubmittingMarketReview}
                       isLoading={isSubmittingMarketReview}
                       loadingText={t('home.submitMarketReview')}
-                      onClick={() => void handleTriggerMarketReview()}
+                      onClick={() => setShowRerunMarketReviewConfirm(true)}
                     >
                       <BarChart3 className="h-4 w-4" />
                       {t('home.rerunMarketReview')}
@@ -1078,6 +1081,30 @@ const HomePage: React.FC = () => {
           />
         </Drawer>
       ) : null}
+
+      <ConfirmDialog
+        isOpen={showAnalyzeConfirm}
+        title={t('home.analyzeConfirmTitle')}
+        message={t('home.analyzeConfirmMessage')}
+        onConfirm={() => { setShowAnalyzeConfirm(false); handleSubmitAnalysis(); }}
+        onCancel={() => setShowAnalyzeConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showMarketReviewConfirm}
+        title={t('home.marketReviewConfirmTitle')}
+        message={t('home.marketReviewConfirmMessage')}
+        onConfirm={() => { setShowMarketReviewConfirm(false); void handleTriggerMarketReview(); }}
+        onCancel={() => setShowMarketReviewConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showRerunMarketReviewConfirm}
+        title={t('home.rerunMarketReviewConfirmTitle')}
+        message={t('home.rerunMarketReviewConfirmMessage')}
+        onConfirm={() => { setShowRerunMarketReviewConfirm(false); void handleTriggerMarketReview(); }}
+        onCancel={() => setShowRerunMarketReviewConfirm(false)}
+      />
 
     </div>
   );
