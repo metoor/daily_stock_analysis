@@ -51,6 +51,8 @@ import type {
   PortfolioTradeListItem,
 } from '../types/portfolio';
 import { areStockCodesEquivalent, normalizeStockCode } from '../utils/stockCode';
+import { useStockIndex } from '../hooks/useStockIndex';
+import { findStockInIndexByCode } from '../utils/stockIndexLoader';
 import { parseDecisionSignalDate } from '../utils/decisionSignalTime';
 import { buildDecisionActionLabelMap, getDecisionActionLabel } from '../utils/decisionAction';
 
@@ -190,6 +192,8 @@ const PortfolioPage: React.FC = () => {
   useEffect(() => {
     document.title = text.documentTitle;
   }, [text.documentTitle]);
+
+  const { index: stockIndex } = useStockIndex();
 
   const [accounts, setAccounts] = useState<PortfolioAccountItem[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<AccountOption>('all');
@@ -1220,7 +1224,15 @@ const PortfolioPage: React.FC = () => {
                     return (
                     <tr key={rowKey} className="border-b border-white/5">
                       <td className="py-2 pr-2 text-secondary">{row.accountName}</td>
-                      <td className="py-2 pr-2 font-mono text-foreground">{row.symbol}</td>
+                      <td className="py-2 pr-2">
+                        <div className="font-mono text-foreground">{row.symbol}</div>
+                        {(() => {
+                          const nameZh = findStockInIndexByCode(row.symbol, stockIndex)?.nameZh;
+                          return nameZh ? (
+                            <div className="text-[11px] text-secondary">{nameZh}</div>
+                          ) : null;
+                        })()}
+                      </td>
                       <td className="py-2 pr-2 text-right">{row.quantity.toFixed(2)}</td>
                       <td className="py-2 pr-2 text-right">{row.avgCost.toFixed(4)}</td>
                       <td className="py-2 pr-2 text-right">

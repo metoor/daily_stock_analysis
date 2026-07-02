@@ -6,6 +6,7 @@
 
 import type { StockIndexData, StockIndexItem, StockIndexTuple } from '../types/stockIndex';
 import { INDEX_FIELD } from './stockIndexFields';
+import { normalizeStockCode } from './stockCode';
 
 export interface IndexLoadResult {
   /** Index data */
@@ -114,6 +115,23 @@ export function findStockInIndex(
   index: StockIndexItem[]
 ): StockIndexItem | null {
   return index.find(item => item.canonicalCode === canonicalCode) || null;
+}
+
+/**
+ * Find stock in index by code, normalizing both sides to tolerate
+ * different exchange-annotation formats (e.g. SH603288 vs 603288.SH).
+ *
+ * @param code - Stock code in any common format
+ * @param index - Stock index
+ * @returns Stock index item or null
+ */
+export function findStockInIndexByCode(
+  code: string,
+  index: StockIndexItem[]
+): StockIndexItem | null {
+  const target = normalizeStockCode(code).toUpperCase();
+  if (!target) return null;
+  return index.find(item => normalizeStockCode(item.canonicalCode).toUpperCase() === target) || null;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   loadStockIndex,
   compressIndex,
   findStockInIndex,
+  findStockInIndexByCode,
   getPopularStocks,
   groupStocksByMarket,
 } from '../stockIndexLoader';
@@ -480,6 +481,49 @@ describe('stockIndexLoader', () => {
       const compressed = compressIndex(specialChars);
       expect(compressed[0][2]).toBe('测试·公司');
       expect(compressed[0][5]).toEqual(['测试(集团)']);
+    });
+  });
+
+  describe('findStockInIndexByCode - Find stock by normalized code', () => {
+    test('matches A-share code with SH prefix against canonical X.SH format', () => {
+      const result = findStockInIndexByCode('SH600519', mockIndexData);
+      expect(result).not.toBeNull();
+      expect(result?.nameZh).toBe('贵州茅台');
+    });
+
+    test('matches SZ prefix against canonical X.SZ format', () => {
+      const result = findStockInIndexByCode('SZ000001', mockIndexData);
+      expect(result?.nameZh).toBe('平安银行');
+    });
+
+    test('matches bare canonical code directly', () => {
+      const result = findStockInIndexByCode('600519.SH', mockIndexData);
+      expect(result?.nameZh).toBe('贵州茅台');
+    });
+
+    test('matches HK code without canonical suffix form', () => {
+      const result = findStockInIndexByCode('HK00700', mockIndexData);
+      expect(result?.nameZh).toBe('腾讯控股');
+    });
+
+    test('matches US ticker case-insensitively', () => {
+      const result = findStockInIndexByCode('aapl.us', mockIndexData);
+      expect(result?.nameZh).toBe('苹果');
+    });
+
+    test('returns null when code not found', () => {
+      const result = findStockInIndexByCode('NOTFOUND.US', mockIndexData);
+      expect(result).toBeNull();
+    });
+
+    test('returns null for empty input', () => {
+      expect(findStockInIndexByCode('', mockIndexData)).toBeNull();
+      expect(findStockInIndexByCode('   ', mockIndexData)).toBeNull();
+    });
+
+    test('returns null for empty index', () => {
+      const result = findStockInIndexByCode('600519.SH', []);
+      expect(result).toBeNull();
     });
   });
 });
