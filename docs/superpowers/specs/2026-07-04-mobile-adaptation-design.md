@@ -72,31 +72,30 @@ BacktestPage、AlertsPage、TokenUsagePage、SettingsPage — 只保证不溢出
 - `AlertsPage.tsx:284` `xl:grid-cols-[380px_minmax(0,1fr)]` → 加 `lg:grid-cols-[320px_minmax(0,1fr)]`，`<lg` 单列
 - `DecisionSignalsPage.tsx:559` `xl:grid-cols-7` → 改为 `xs:grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7`
 
-### 5.3 图表 ResponsiveContainer
+### 5.3 图表 ResponsiveContainer 全项目扫描
 
-- 排查 `BacktestPage` 所有 recharts 用法，未包裹 `ResponsiveContainer` 的全部包裹，`width="100%"`、`height` 取固定值或 `aspect` ratio
-- 已包裹的（`DecisionSignalTimeline:229`、`PortfolioPage:1295`）确认 `width="100%"`
+排查 `apps/dsa-web/src/` 全部 recharts 用法，未包裹 `ResponsiveContainer` 的全部包裹，`width="100%"`、`height` 取固定值。已知 `DecisionSignalTimeline:229`、`PortfolioPage:1295` 已包裹，需确认其余位置（如有）。
 
-### 5.4 Shell 抽屉验证与补强
+### 5.4 Shell 抽屉验证
 
-现状（`Shell.tsx:17,40,72-81`）已有 `<lg` 汉堡菜单 + Drawer。
+现状（`Shell.tsx:17,40,72-81`）已有 `<lg` 汉堡菜单 + Drawer。`Drawer.tsx:47-49` 已实现 body scroll lock。
 
 验证项：
-- 抽屉打开时 body 滚动锁定（如未实现则补上）
-- 路由切换后自动关闭
-- resize 到 lg+ 自动关闭（已有）
+- 抽屉打开时 body 滚动锁定（已实现，验证）
+- resize 到 lg+ 自动关闭（已实现，验证）
+- 路由切换后自动关闭（待验证，必要时补强）
 
-### 5.5 ChatPage 移动端切换
+### 5.5 ChatPage 移动端切换验证
 
-现状（`ChatPage.tsx:875,1292`）：`<md` 隐藏会话列表，有切换按钮。
+现状（`ChatPage.tsx:875,879-893,914`）：`<md` 隐藏会话列表，第914行有切换按钮，第879-893行已有移动端覆盖层实现。
 
-补强：点击切换按钮将会话列表以 `Drawer` 形式从左侧滑出，选中会话后自动关闭。
+验证项：点击切换按钮弹出移动端覆盖层、选中会话后自动关闭、覆盖层与 Drawer 行为一致。如有缺陷再补强。
 
-### 5.6 HomePage 右侧任务面板
+### 5.6 HomePage 任务面板验证
 
-现状（`HomePage.tsx:879`）：`<md` 隐藏右侧任务面板。
+现状（`HomePage.tsx:705-712,878-893`）：`<md` 时右侧 sidebar 隐藏，第705-712行有移动端切换按钮，第883-893行已有移动端覆盖层实现，包含 TaskPanel 与 StockBar。
 
-补强：`<md` 时在顶部 main 区域上方加一个可折叠的任务进度 badge，点击展开任务列表（可用 `Drawer` 或 `Popover` 实现）。
+验证项：移动端切换按钮可点击、覆盖层滑出、TaskPanel 内容可见可操作、选中后自动关闭。如有缺陷再补强。
 
 ### 5.7 LoginPage
 
