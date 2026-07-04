@@ -1395,7 +1395,7 @@ const SettingsPage: React.FC = () => {
       {isLoading ? (
         <SettingsLoading />
       ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_1fr]">
+        <div className="grid gap-5 md:grid-cols-[240px_1fr] lg:grid-cols-[280px_1fr]">
           <aside className="lg:sticky lg:top-4 lg:self-start">
             <SettingsCategoryNav
               categories={categories}

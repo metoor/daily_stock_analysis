@@ -556,7 +556,7 @@ const DecisionSignalsPage: React.FC = () => {
         />
 
         <Card padding="md">
-          <form className="grid gap-3 md:grid-cols-3 xl:grid-cols-7" onSubmit={handleApplyFilters}>
+          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7" onSubmit={handleApplyFilters}>
             <select
               className="input-surface input-focus-glow h-11 rounded-xl border bg-transparent px-3 text-sm"
               value={filters.market}
