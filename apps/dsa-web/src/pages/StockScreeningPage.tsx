@@ -39,6 +39,7 @@ import {
 } from '../api/alphasift';
 import { formatParsedApiError, getParsedApiError, toApiErrorMessage, type ParsedApiError } from '../api/error';
 import { useColorScheme } from '../hooks/useColorScheme';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { AppPage, Button, Card, InlineAlert } from '../components/common';
 
 const MARKETS = [{ id: 'cn', label: 'A 股' }];
@@ -438,6 +439,7 @@ const MiniSparkline: React.FC<{ score?: number | null; selected?: boolean }> = (
 const StockScreeningPage: React.FC = () => {
   const navigate = useNavigate();
   const { riseClass } = useColorScheme();
+  const isMobile = useIsMobile();
   const [restoredTask] = useState<PersistedScreenTask | null>(() => readPersistedScreenTask());
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(false);
@@ -1293,8 +1295,8 @@ const StockScreeningPage: React.FC = () => {
             <p className="mt-2 text-sm text-secondary-text">开启 AlphaSift 后点击“运行选股”生成候选列表。</p>
           </div>
         ) : (
-          <>
-            <div className="sm:hidden space-y-3">
+          isMobile ? (
+            <div className="space-y-3">
               {candidates.map((item) => {
                 const expanded = expandedCode === item.code;
                 const llmInsightAvailable = hasLlmInsight(item);
@@ -1434,7 +1436,8 @@ const StockScreeningPage: React.FC = () => {
                 );
               })}
             </div>
-            <div className="hidden sm:block overflow-hidden rounded-xl border border-border">
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-border">
               <table className="w-full min-w-[860px] border-collapse text-sm">
               <thead className="bg-surface text-left text-xs text-secondary-text">
                 <tr>
@@ -1591,7 +1594,7 @@ const StockScreeningPage: React.FC = () => {
               </tbody>
             </table>
             </div>
-          </>
+          )
         )}
       </section>
     </AppPage>

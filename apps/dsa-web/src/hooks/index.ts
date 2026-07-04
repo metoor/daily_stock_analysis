@@ -4,6 +4,7 @@ export { useHomeDashboardState } from './useHomeDashboardState';
 export { useRunFlowSnapshot } from './useRunFlowSnapshot';
 export { useTaskStream } from './useTaskStream';
 export { useColorScheme } from './useColorScheme';
+export { useIsMobile } from './useIsMobile';
 export { useSystemConfig } from './useSystemConfig';
 export type {
   SSEEventType,

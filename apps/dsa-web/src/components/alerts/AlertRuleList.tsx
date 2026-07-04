@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Bell, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Pagination, Select } from '../common';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
+import { useIsMobile } from '../../hooks';
 import { formatUiText, type UiLanguage } from '../../i18n/uiText';
 import {
   ALERT_DIRECTION_LABELS,
@@ -125,6 +126,7 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
   busyRule = null,
 }) => {
   const { language } = useUiLanguage();
+  const isMobile = useIsMobile();
   const text = ALERT_LIST_TEXT[language];
   const [pendingDelete, setPendingDelete] = useState<AlertRuleItem | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -169,8 +171,8 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
           />
         </div>
       ) : (
-        <>
-          <div className="sm:hidden space-y-3">
+        isMobile ? (
+          <div className="space-y-3">
             {rules.map((rule) => (
               <Card key={rule.id} variant="bordered" padding="sm" className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -186,7 +188,14 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
                 </div>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                   <dt className="text-muted-text">{text.type}</dt>
-                  <dd className="text-secondary-text">{ALERT_TYPE_LABELS[language][rule.alertType]}</dd>
+                  <dd className="text-secondary-text">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge variant="info">{ALERT_TYPE_LABELS[language][rule.alertType]}</Badge>
+                      <Badge variant={rule.severity === 'critical' ? 'danger' : rule.severity === 'warning' ? 'warning' : 'default'}>
+                        {ALERT_SEVERITY_LABELS[language][rule.severity] ?? rule.severity}
+                      </Badge>
+                    </div>
+                  </dd>
                   <dt className="text-muted-text">{text.target}</dt>
                   <dd className="text-secondary-text">
                     <span className="font-mono">{formatTarget(rule, language)}</span>
@@ -244,7 +253,8 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
               </Card>
             ))}
           </div>
-          <div className="hidden sm:block min-h-0 flex-1 overflow-x-auto">
+        ) : (
+          <div className="min-h-0 flex-1 overflow-x-auto">
             <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b border-border/60 text-xs uppercase text-muted-text">
               <tr>
@@ -330,7 +340,7 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
             </tbody>
           </table>
           </div>
-        </>
+        )
       )}
 
       <Pagination

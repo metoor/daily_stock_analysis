@@ -13,6 +13,7 @@ import {
 } from '../components/alerts/AlertRuleList';
 import { AlertTriggerHistory } from '../components/alerts/AlertTriggerHistory';
 import { ApiErrorAlert, AppPage, Badge, Card, EmptyState, InlineAlert, Loading, PageHeader } from '../components/common';
+import { useIsMobile } from '../hooks';
 import type {
   AlertNotificationItem,
   AlertRuleCreateRequest,
@@ -98,6 +99,7 @@ function formatNotificationStatus(notification: AlertNotificationItem): string {
 }
 
 const AlertsPage: React.FC = () => {
+  const isMobile = useIsMobile();
   useEffect(() => {
     document.title = '告警中心 - DSA';
   }, []);
@@ -281,7 +283,7 @@ const AlertsPage: React.FC = () => {
       ) : null}
       {rulesError ? <ApiErrorAlert error={rulesError} onDismiss={() => setRulesError(null)} /> : null}
 
-      <div className="grid items-stretch gap-5 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="grid items-stretch gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
         <AlertRuleForm onSubmit={handleCreateRule} isSubmitting={createLoading} />
         <div className="flex h-full min-h-0 flex-col gap-4">
           <AlertRuleList
@@ -331,8 +333,8 @@ const AlertsPage: React.FC = () => {
           />
         ) : null}
         {!notificationsLoading && notifications.length > 0 ? (
-          <>
-            <div className="sm:hidden space-y-3">
+          isMobile ? (
+            <div className="space-y-3">
               {notifications.map((notification) => (
                 <Card key={notification.id} variant="bordered" padding="sm" className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -361,7 +363,8 @@ const AlertsPage: React.FC = () => {
                 </Card>
               ))}
             </div>
-            <div className="hidden sm:block overflow-x-auto">
+          ) : (
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] text-left text-sm">
               <thead className="border-b border-border/60 text-xs uppercase text-muted-text">
                 <tr>
@@ -387,7 +390,7 @@ const AlertsPage: React.FC = () => {
               </tbody>
             </table>
             </div>
-          </>
+          )
         ) : null}
       </Card>
     </AppPage>

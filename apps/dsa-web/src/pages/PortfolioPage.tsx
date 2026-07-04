@@ -9,6 +9,7 @@ import { ApiErrorAlert, Card, Badge, ConfirmDialog, EmptyState, InlineAlert } fr
 import { PortfolioSignalSummary } from '../components/decision-signals/DecisionSignalDisplay';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import { useColorScheme } from '../hooks/useColorScheme';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { formatUiText } from '../i18n/uiText';
 import { PORTFOLIO_TEXT } from '../locales/featureText';
 import type { FxRefreshFeedback } from '../utils/portfolioFormat';
@@ -185,6 +186,7 @@ async function loadPortfolioSignalLookup(lookup: PortfolioSignalLookup): Promise
 const PortfolioPage: React.FC = () => {
   const { language, t } = useUiLanguage();
   const { riseClass, fallClass } = useColorScheme();
+  const isMobile = useIsMobile();
   const text = PORTFOLIO_TEXT[language];
   const decisionActionLabels = useMemo(() => buildDecisionActionLabelMap(t), [t]);
 
@@ -1200,8 +1202,8 @@ const PortfolioPage: React.FC = () => {
               className="border-none bg-transparent px-4 py-8 shadow-none"
             />
           ) : (
-            <>
-              <div className="sm:hidden space-y-3">
+            isMobile ? (
+              <div className="space-y-3">
                 {positionRows.map((row) => {
                   const rowKey = `${row.accountId}-${row.symbol}-${row.market}`;
                   const analyzing = positionAnalysisLoadingKey === rowKey;
@@ -1217,7 +1219,7 @@ const PortfolioPage: React.FC = () => {
                           ) : null}
                           <div className="mt-0.5 text-xs text-secondary">{row.accountName}</div>
                         </div>
-                        <Badge variant={hasPositionPrice(row) ? (row.unrealizedPnlBase >= 0 ? 'success' : 'danger') : 'default'}>
+                        <Badge variant={hasPositionPrice(row) && row.unrealizedPnlPct !== null && row.unrealizedPnlPct !== undefined ? (row.unrealizedPnlPct >= 0 ? 'success' : 'danger') : 'default'}>
                           {formatSignedPct(row.unrealizedPnlPct)}
                         </Badge>
                       </div>
@@ -1258,7 +1260,8 @@ const PortfolioPage: React.FC = () => {
                   );
                 })}
               </div>
-              <div className="hidden sm:block overflow-x-auto">
+            ) : (
+              <div className="overflow-x-auto">
                 <table className="min-w-[860px] w-full text-sm">
                 <thead className="text-xs text-secondary border-b border-white/10">
                   <tr>
@@ -1341,7 +1344,7 @@ const PortfolioPage: React.FC = () => {
                 </tbody>
               </table>
               </div>
-            </>
+            )
           )}
         </Card>
 

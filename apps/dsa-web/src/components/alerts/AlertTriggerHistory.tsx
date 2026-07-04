@@ -1,6 +1,7 @@
 import type React from 'react';
 import { Activity } from 'lucide-react';
 import { Badge, Card, EmptyState, Loading } from '../common';
+import { useIsMobile } from '../../hooks';
 import type { AlertTriggerItem } from '../../types/alerts';
 import { formatDateTime } from '../../utils/format';
 import { getMarketPhaseSummaryLabel } from '../../utils/marketPhase';
@@ -48,6 +49,7 @@ interface AlertTriggerHistoryProps {
 }
 
 export const AlertTriggerHistory: React.FC<AlertTriggerHistoryProps> = ({ triggers, isLoading = false }) => {
+  const isMobile = useIsMobile();
   return (
     <Card title="触发历史" subtitle="评估记录" variant="bordered" padding="md">
       {isLoading ? <Loading label="正在加载触发历史" /> : null}
@@ -59,8 +61,8 @@ export const AlertTriggerHistory: React.FC<AlertTriggerHistoryProps> = ({ trigge
         />
       ) : null}
       {!isLoading && triggers.length > 0 ? (
-        <>
-          <div className="sm:hidden space-y-3">
+        isMobile ? (
+          <div className="space-y-3">
             {triggers.map((trigger) => (
               <Card key={trigger.id} variant="bordered" padding="sm" className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -88,7 +90,8 @@ export const AlertTriggerHistory: React.FC<AlertTriggerHistoryProps> = ({ trigge
               </Card>
             ))}
           </div>
-          <div className="hidden sm:block overflow-x-auto">
+        ) : (
+          <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="border-b border-border/60 text-xs uppercase text-muted-text">
               <tr>
@@ -126,7 +129,7 @@ export const AlertTriggerHistory: React.FC<AlertTriggerHistoryProps> = ({ trigge
             </tbody>
           </table>
           </div>
-        </>
+        )
       ) : null}
     </Card>
   );

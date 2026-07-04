@@ -59,14 +59,17 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /mobile-smoke\.spec\.ts/,
     },
     {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 5'] },
+      testMatch: /mobile-smoke\.spec\.ts/,
     },
     {
       name: 'tablet-chrome',
       use: { ...devices['iPad Mini'] },
+      testMatch: /mobile-smoke\.spec\.ts/,
     },
   ],
 });

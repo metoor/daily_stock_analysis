@@ -86,6 +86,8 @@ async function login(page: Page) {
 }
 
 test.describe('mobile drawer/sidebar smoke', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
   test('Shell drawer opens on mobile', async ({ page: browserPage }) => {
     await login(browserPage);
     await browserPage.goto('/');
