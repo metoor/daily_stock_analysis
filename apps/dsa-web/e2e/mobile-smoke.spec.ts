@@ -120,3 +120,25 @@ test.describe('mobile drawer/sidebar smoke', () => {
     await expect(browserPage.locator('.page-drawer-overlay').first()).toBeVisible();
   });
 });
+
+const OVERFLOW_PAGES = [
+  { name: 'login', path: '/login', requiresAuth: false },
+  { name: 'backtest', path: '/backtest', requiresAuth: true },
+  { name: 'alerts', path: '/alerts', requiresAuth: true },
+  { name: 'usage', path: '/usage', requiresAuth: true },
+  { name: 'settings', path: '/settings', requiresAuth: true },
+];
+
+for (const page of OVERFLOW_PAGES) {
+  test(`${page.name} no horizontal overflow on mobile`, async ({ page: browserPage }) => {
+    if (page.requiresAuth) {
+      await login(browserPage);
+    }
+    await browserPage.goto(page.path);
+    await browserPage.waitForLoadState('domcontentloaded');
+    await browserPage.waitForTimeout(500);
+    const scrollWidth = await browserPage.evaluate(() => document.documentElement.scrollWidth);
+    const clientWidth = await browserPage.evaluate(() => document.documentElement.clientWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+}
