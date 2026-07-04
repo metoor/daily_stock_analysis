@@ -3,17 +3,20 @@ import { test, expect, type Page } from '@playwright/test';
 const smokePassword = process.env.DSA_WEB_SMOKE_PASSWORD;
 
 const MOBILE_PAGES = [
-  { name: 'home', path: '/' },
-  { name: 'chat', path: '/chat' },
-  { name: 'screening', path: '/screening' },
-  { name: 'portfolio', path: '/portfolio' },
-  { name: 'decision-signals', path: '/decision-signals' },
-  { name: 'login', path: '/login' },
+  { name: 'home', path: '/', requiresAuth: true },
+  { name: 'chat', path: '/chat', requiresAuth: true },
+  { name: 'screening', path: '/screening', requiresAuth: true },
+  { name: 'portfolio', path: '/portfolio', requiresAuth: true },
+  { name: 'decision-signals', path: '/decision-signals', requiresAuth: true },
+  { name: 'login', path: '/login', requiresAuth: false },
 ];
 
 for (const page of MOBILE_PAGES) {
   test.describe(`${page.name} page mobile smoke`, () => {
     test('loads without console errors', async ({ page: browserPage }) => {
+      if (page.requiresAuth) {
+        await login(browserPage);
+      }
       const errors: string[] = [];
       browserPage.on('console', (msg) => {
         if (msg.type() === 'error') errors.push(msg.text());
@@ -33,6 +36,7 @@ const TABLE_PAGES = [
 
 for (const page of TABLE_PAGES) {
   test(`${page.name} table visibility by viewport`, async ({ page: browserPage }) => {
+    await login(browserPage);
     await browserPage.goto(page.path);
     await browserPage.waitForLoadState('domcontentloaded');
     await browserPage.waitForTimeout(500);
