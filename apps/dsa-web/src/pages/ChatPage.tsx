@@ -910,6 +910,7 @@ const ChatPage: React.FC = () => {
           <div className="flex items-start justify-between gap-4">
             <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
               <button
+                data-testid="chat-sidebar-toggle"
                 onClick={() => setSidebarOpen(true)}
                 className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-hover transition-colors text-secondary-text hover:text-foreground"
                 aria-label="历史对话"

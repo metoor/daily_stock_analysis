@@ -1,4 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+const smokePassword = process.env.DSA_WEB_SMOKE_PASSWORD;
 
 const MOBILE_PAGES = [
   { name: 'home', path: '/' },
@@ -43,3 +45,78 @@ for (const page of TABLE_PAGES) {
     }
   });
 }
+
+async function login(page: Page) {
+  test.skip(!smokePassword, 'Set DSA_WEB_SMOKE_PASSWORD to run mobile drawer smoke tests.');
+
+  await page.goto('/login');
+  await page.waitForLoadState('domcontentloaded');
+
+  const homeLink = page.getByRole('link', { name: '首页' });
+  const isAlreadyAuthenticated =
+    page.url().endsWith('/') ||
+    (await homeLink.isVisible({ timeout: 2_000 }).catch(() => false));
+
+  if (isAlreadyAuthenticated) {
+    await page.waitForLoadState('domcontentloaded');
+    return;
+  }
+
+  const passwordInput = page.locator('#password');
+  const submitButton = page.getByRole('button', { name: /授权进入工作台|完成设置并登录/ });
+  await expect(passwordInput).toBeVisible({ timeout: 10_000 });
+  await passwordInput.fill(smokePassword!);
+  await expect(submitButton).toBeVisible();
+
+  await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().includes('/api/v1/auth/login') && response.status() === 200,
+      { timeout: 15_000 }
+    ),
+    submitButton.click(),
+  ]);
+
+  await page.waitForURL('/', { timeout: 15_000 });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1000);
+}
+
+test.describe('mobile drawer/sidebar smoke', () => {
+  test('Shell drawer opens on mobile', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/');
+    await browserPage.waitForLoadState('domcontentloaded');
+
+    const menuButton = browserPage.getByTestId('mobile-menu-button');
+    await expect(menuButton).toBeVisible();
+    await menuButton.click();
+
+    const drawer = browserPage.getByRole('dialog');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.locator('nav')).toBeVisible();
+  });
+
+  test('ChatPage mobile sidebar opens', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/chat');
+    await browserPage.waitForLoadState('domcontentloaded');
+
+    const toggleButton = browserPage.getByTestId('chat-sidebar-toggle');
+    await expect(toggleButton).toBeVisible();
+    await toggleButton.click();
+
+    await expect(browserPage.locator('.page-drawer-overlay').first()).toBeVisible();
+  });
+
+  test('HomePage mobile sidebar opens', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/');
+    await browserPage.waitForLoadState('domcontentloaded');
+
+    const toggleButton = browserPage.getByTestId('home-sidebar-toggle');
+    await expect(toggleButton).toBeVisible();
+    await toggleButton.click();
+
+    await expect(browserPage.locator('.page-drawer-overlay').first()).toBeVisible();
+  });
+});

@@ -702,6 +702,7 @@ const HomePage: React.FC = () => {
           <div className="flex min-w-0 flex-1 flex-col gap-2.5 md:flex-row md:items-center">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <button
+                data-testid="home-sidebar-toggle"
                 onClick={() => setSidebarOpen(true)}
                 className="md:hidden -ml-1 flex-shrink-0 rounded-lg p-1.5 text-secondary-text transition-colors hover:bg-hover hover:text-foreground"
                 aria-label={t('home.historyButton')}
