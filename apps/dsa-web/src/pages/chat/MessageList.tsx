@@ -359,7 +359,7 @@ export function MessageList({
                           导出
                         </button>
                       </div>
-                      <div className={isMobile ? 'chat-prose' : 'chat-prose pr-20 sm:pr-24'}>
+                      <div className="chat-prose pr-20 sm:pr-24">
                         <Markdown remarkPlugins={[remarkGfm]}>
                           {msg.content}
                         </Markdown>
