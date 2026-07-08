@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 台股（tw）市场阶段（`market_phase`）新增收盘集合竞价识别：`_CLOSING_AUCTION_WINDOW_MINUTES` 缺 `tw` 键时 `.get(market, 0)` 得零宽窗口，TWSE/TPEx 13:25–13:30 的 5 分钟收盘竞价此前永远无法判定为 `closing_auction`（收盘前一刻仍 `intraday`、13:30 直接 `postmarket`）；补 `"tw": 5` 修正，附阶段边界回归测试。仅 tw 加项，cn/hk/us 与 jp/kr 行为不变。
 - [改进] Web 前端新增手机与平板 viewport 适配（xs 断点、表格卡片变体、grid 中间断点、移动端 smoke 用例）
 - [测试] Playwright 新增 mobile-chrome (Pixel 5) 与 tablet-chrome (iPad Mini) 项目
+- [改进] 问股页面移动端适配：拆分 ChatPage 为协调器 + ChatHeader/MessageList/ChatComposer/SessionSidebar 四个子组件，mobile-first 响应式，桌面端功能不变
+- [改进] 问股页面移动端输入区：分层结构（始终可见 textarea + "+"按钮触发底部抽屉含技能/股票/自选/上下文压缩）
+- [改进] 问股页面移动端消息气泡：宽度 85%/92%、字号 14px、代码块/表格横向滚动
+- [改进] 问股页面移动端 Header：单行 sticky 顶栏，描述移到 EmptyState
+- [测试] e2e mobile-smoke 新增问股页面交互用例（输入区抽屉、消息区无溢出、快速提问网格、侧边栏宽度）
 
 ## [3.24.1] - 2026-06-28
 
