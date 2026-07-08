@@ -1,11 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronDown, SlidersHorizontal } from 'lucide-react';
-import { cn } from '../utils/cn';
 import { agentApi } from '../api/agent';
 import { systemConfigApi } from '../api/systemConfig';
-import { ApiErrorAlert, Button, InlineAlert } from '../components/common';
-import { getParsedApiError } from '../api/error';
 import type { SkillInfo } from '../api/agent';
 import {
   useAgentChatStore,
@@ -25,6 +21,7 @@ import { findMatchingStockCode, includesStockCode, normalizeStockCode } from '..
 import { SessionSidebar } from './chat/SessionSidebar';
 import { ChatHeader } from './chat/ChatHeader';
 import { MessageList } from './chat/MessageList';
+import { ChatComposer } from './chat/ChatComposer';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 // Quick question examples shown on empty state
@@ -38,7 +35,6 @@ const QUICK_QUESTIONS = [
 ];
 
 const MAX_SELECTED_SKILLS = 3;
-const CONTEXT_COMPRESSION_CONFIG_KEY = 'AGENT_CONTEXT_COMPRESSION_ENABLED';
 const STRONG_COMPARE_STOCK_MESSAGE_RE = /比较|对比|\bvs\b|和[^，。,.!?！？]{0,40}比/i;
 const WEAK_COMPARE_STOCK_MESSAGE_RE = /差异(?!化)|区别|不同|相比|对照|比一比/;
 const CHOICE_COMPARE_STOCK_MESSAGE_RE = /哪个|哪只|哪一个|谁更|更值得|更适合|怎么选|选哪|二选一/;
@@ -142,16 +138,8 @@ const ChatPage: React.FC = () => {
   const [input, setInput] = useState('');
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
-  const [showSkillDesc, setShowSkillDesc] = useState<string | null>(null);
-  const [mobileSkillPickerOpen, setMobileSkillPickerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isFollowUpContextLoading, setIsFollowUpContextLoading] = useState(false);
-  const [contextCompressionEnabled, setContextCompressionEnabled] = useState(false);
-  const [contextCompressionLoaded, setContextCompressionLoaded] = useState(false);
-  const [contextCompressionSaving, setContextCompressionSaving] = useState(false);
-  const [contextCompressionConfigVersion, setContextCompressionConfigVersion] = useState('');
-  const [contextCompressionMaskToken, setContextCompressionMaskToken] = useState('******');
-  const [contextCompressionError, setContextCompressionError] = useState<string | null>(null);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [watchlistCodes, setWatchlistCodes] = useState<string[]>([]);
   const [isWatchlistActioning, setIsWatchlistActioning] = useState(false);
@@ -245,7 +233,6 @@ const ChatPage: React.FC = () => {
     loading,
     progressSteps,
     sessionId,
-    chatError,
     loadSessions,
     loadInitialSession,
     switchSession,
@@ -342,81 +329,8 @@ const ChatPage: React.FC = () => {
       });
   }, []);
 
-  useEffect(() => {
-    let active = true;
-
-    void systemConfigApi.getConfig(false)
-      .then((config) => {
-        if (!active) {
-          return;
-        }
-        const enabledItem = config.items.find((item) => item.key === CONTEXT_COMPRESSION_CONFIG_KEY);
-        setContextCompressionEnabled(String(enabledItem?.value ?? '').trim().toLowerCase() === 'true');
-        setContextCompressionConfigVersion(config.configVersion);
-        setContextCompressionMaskToken(config.maskToken || '******');
-        setContextCompressionLoaded(true);
-        setContextCompressionError(null);
-      })
-      .catch((error) => {
-        if (!active) {
-          return;
-        }
-        const parsed = getParsedApiError(error);
-        setContextCompressionLoaded(false);
-        setContextCompressionError(parsed.message || '无法读取上下文压缩配置');
-        console.error('Failed to load context compression setting:', error);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const updateContextCompressionEnabled = useCallback(
-    async (nextEnabled: boolean) => {
-      if (!contextCompressionLoaded || contextCompressionSaving) {
-        return;
-      }
-
-      const previousEnabled = contextCompressionEnabled;
-      setContextCompressionEnabled(nextEnabled);
-      setContextCompressionSaving(true);
-      setContextCompressionError(null);
-
-      try {
-        const result = await systemConfigApi.update({
-          configVersion: contextCompressionConfigVersion,
-          maskToken: contextCompressionMaskToken,
-          reloadNow: true,
-          items: [
-            {
-              key: CONTEXT_COMPRESSION_CONFIG_KEY,
-              value: nextEnabled ? 'true' : 'false',
-            },
-          ],
-        });
-        setContextCompressionConfigVersion(result.configVersion || contextCompressionConfigVersion);
-      } catch (error) {
-        const parsed = getParsedApiError(error);
-        setContextCompressionEnabled(previousEnabled);
-        setContextCompressionError(parsed.message || '上下文压缩设置保存失败');
-      } finally {
-        setContextCompressionSaving(false);
-      }
-    },
-    [
-      contextCompressionConfigVersion,
-      contextCompressionEnabled,
-      contextCompressionLoaded,
-      contextCompressionMaskToken,
-      contextCompressionSaving,
-    ],
-  );
-
   const availableSkillIds = new Set(skills.map((skill) => skill.id));
   const quickQuestions = QUICK_QUESTIONS.filter((question) => availableSkillIds.size === 0 || availableSkillIds.has(question.skill));
-  const selectedSkillIdSet = new Set(selectedSkillIds);
-  const skillLimitReached = selectedSkillIds.length >= MAX_SELECTED_SKILLS;
 
   const getSkillNames = useCallback(
     (skillIds: string[]) => skillIds.map((id) => skills.find((s) => s.id === id)?.name || id),
@@ -554,7 +468,6 @@ const ChatPage: React.FC = () => {
       setIsFollowUpContextLoading(false);
 
       setInput('');
-      setMobileSkillPickerOpen(false);
       requestScrollToBottom('smooth');
       await startStream(payload, {
         skillNames: usedSkillNames,
@@ -638,185 +551,24 @@ const ChatPage: React.FC = () => {
           }}
         />
 
-          {/* Input area */}
-          <div className="border-t border-white/6 bg-card/88 p-4 md:p-6 relative z-20">
-            <div className="space-y-3">
-              {chatError ? <ApiErrorAlert error={chatError} /> : null}
-              {isFollowUpContextLoading ? (
-                <InlineAlert
-                  variant="info"
-                  title="追问上下文加载中"
-                  message="正在加载历史分析上下文；现在可直接发送追问。"
-                  className="rounded-xl px-3 py-2 text-xs shadow-none"
-                />
-              ) : null}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/6 bg-surface/25 px-3 py-2">
-                <label
-                  className={cn(
-                    'inline-flex items-center gap-2 text-sm',
-                    contextCompressionLoaded && !contextCompressionSaving
-                      ? 'cursor-pointer text-foreground'
-                      : 'cursor-not-allowed text-muted-text',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={contextCompressionEnabled}
-                    disabled={!contextCompressionLoaded || contextCompressionSaving}
-                    onChange={(event) => void updateContextCompressionEnabled(event.target.checked)}
-                    className="chat-skill-checkbox"
-                  />
-                  <span className="font-medium">上下文压缩</span>
-                  <span className="text-xs text-muted-text">节省长会话 token</span>
-                </label>
-                <span className="text-xs text-muted-text">
-                  {contextCompressionSaving
-                    ? '保存中...'
-                    : contextCompressionEnabled
-                      ? '已启用'
-                      : '未启用'}
-                </span>
-              </div>
-              {contextCompressionError ? (
-                <InlineAlert
-                  variant="danger"
-                  title="上下文压缩设置未保存"
-                  message={contextCompressionError}
-                  className="rounded-xl px-3 py-2 text-xs shadow-none"
-                />
-              ) : null}
-              {skills.length > 0 && (
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    className="home-surface-button flex h-10 w-full items-center justify-between gap-3 rounded-xl px-3 text-left text-sm text-foreground md:hidden"
-                    aria-label={mobileSkillPickerOpen ? '收起策略选择' : '展开策略选择'}
-                    aria-expanded={mobileSkillPickerOpen}
-                    aria-controls="chat-skill-picker-panel"
-                    onClick={() => setMobileSkillPickerOpen((open) => !open)}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <SlidersHorizontal className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                      <span className="flex-shrink-0 font-medium">策略</span>
-                      <span className="truncate text-xs text-muted-text">{selectedSkillSummary}</span>
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        'h-4 w-4 flex-shrink-0 text-muted-text transition-transform',
-                        mobileSkillPickerOpen ? 'rotate-180' : '',
-                      )}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  <div
-                    id="chat-skill-picker-panel"
-                    data-testid="chat-skill-picker-panel"
-                    className={cn(
-                      mobileSkillPickerOpen ? 'flex' : 'hidden',
-                      'max-h-40 flex-wrap items-start gap-x-5 gap-y-2 overflow-y-auto rounded-xl border border-white/6 bg-surface/25 px-3 py-2 md:flex md:max-h-none md:overflow-visible md:border-0 md:bg-transparent md:p-0',
-                    )}
-                  >
-                    <span className="text-xs text-muted-text font-medium uppercase tracking-wider flex-shrink-0 mt-1">
-                      策略
-                    </span>
-                    <label className="flex items-center gap-1.5 text-sm cursor-pointer group mt-0.5">
-                      <input
-                        type="checkbox"
-                        name="general-analysis"
-                        value=""
-                        checked={selectedSkillIds.length === 0}
-                        onChange={() => setSelectedSkillIds([])}
-                        className="chat-skill-checkbox"
-                      />
-                      <span
-                        className={`transition-colors text-sm ${selectedSkillIds.length === 0 ? 'text-foreground font-medium' : 'text-secondary-text group-hover:text-foreground'}`}
-                      >
-                        通用分析
-                      </span>
-                    </label>
-                    {skills.map((s) => {
-                      const checked = selectedSkillIdSet.has(s.id);
-                      const disabled = !checked && skillLimitReached;
-                      return (
-                        <label
-                          key={s.id}
-                          className={`flex items-center gap-1.5 cursor-pointer group relative mt-0.5 ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          onMouseEnter={() => setShowSkillDesc(s.id)}
-                          onMouseLeave={() => setShowSkillDesc(null)}
-                        >
-                          <input
-                            type="checkbox"
-                            name="skills"
-                            value={s.id}
-                            checked={checked}
-                            disabled={disabled}
-                            onChange={() => toggleSkillSelection(s.id)}
-                            className="chat-skill-checkbox"
-                          />
-                          <span
-                            className={`transition-colors text-sm ${checked ? 'text-foreground font-medium' : 'text-secondary-text group-hover:text-foreground'}`}
-                          >
-                            {s.name}
-                          </span>
-                          {showSkillDesc === s.id && s.description && (
-                            <div className="skill-desc-tooltip">
-                              <p className="skill-title">{s.name}</p>
-                              <p>{s.description}</p>
-                            </div>
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-            {activeStockCode && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-text font-mono">{activeStockCode}</span>
-                <Button
-                  variant="secondary"
-                  size="xsm"
-                  isLoading={isWatchlistActioning}
-                  onClick={() => void handleToggleWatchlist(activeStockCode)}
-                  className="text-[11px]"
-                >
-                  {stockInWatchlist(activeStockCode) ? '从自选删除' : '加入自选'}
-                </Button>
-                {watchlistMessage && (
-                  <span className="text-[11px] text-secondary-text animate-in fade-in">{watchlistMessage}</span>
-                )}
-              </div>
-            )}
-
-              <div className="flex items-end gap-3">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="例如：分析 600519 / 茅台现在适合买入吗？ (Enter 发送, Shift+Enter 换行)"
-                  disabled={loading}
-                  rows={1}
-                  className="input-surface input-focus-glow flex-1 min-h-[44px] max-h-[200px] rounded-xl border bg-transparent px-4 py-2.5 text-sm transition-all focus:outline-none resize-none disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ height: 'auto' }}
-                  onInput={(e) => {
-                    const t = e.target as HTMLTextAreaElement;
-                    t.style.height = 'auto';
-                    t.style.height = `${Math.min(t.scrollHeight, 200)}px`;
-                  }}
-                />
-                <Button
-                  variant="primary"
-                  onClick={() => handleSend()}
-                  disabled={!input.trim() || loading}
-                  isLoading={loading}
-                  className="btn-primary flex-shrink-0"
-                >
-                  发送
-                </Button>
-              </div>
-            </div>
-          </div>
+        <ChatComposer
+          isMobile={isMobile}
+          composerValue={input}
+          setComposerValue={setInput}
+          onSend={() => handleSend()}
+          onKeyDown={handleKeyDown}
+          skills={skills}
+          selectedSkillIds={selectedSkillIds}
+          setSelectedSkillIds={setSelectedSkillIds}
+          toggleSkillSelection={toggleSkillSelection}
+          selectedSkillSummary={selectedSkillSummary}
+          activeStockCode={activeStockCode}
+          onToggleWatchlist={handleToggleWatchlist}
+          stockInWatchlist={stockInWatchlist}
+          isWatchlistActioning={isWatchlistActioning}
+          watchlistMessage={watchlistMessage}
+          isFollowUpContextLoading={isFollowUpContextLoading}
+        />
       </div>
     </div>
   );
