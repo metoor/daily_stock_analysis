@@ -83,6 +83,9 @@ verify_*.py
 !.claude/skills/
 !.claude/skills/**
 
+# ignore superpowers brainstorming mockups (local visual companion artifacts)
+.superpowers/
+
 # ignore static files
 static/
 /apps/dsa-desktop/dist/
