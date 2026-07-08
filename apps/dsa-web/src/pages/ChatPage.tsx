@@ -6,7 +6,7 @@ import { ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { agentApi } from '../api/agent';
 import { systemConfigApi } from '../api/systemConfig';
-import { ApiErrorAlert, Badge, Button, EmptyState, InlineAlert, ScrollArea, Tooltip } from '../components/common';
+import { ApiErrorAlert, Badge, Button, EmptyState, InlineAlert, ScrollArea } from '../components/common';
 import { getParsedApiError } from '../api/error';
 import type { SkillInfo } from '../api/agent';
 import {
@@ -14,7 +14,6 @@ import {
   type Message,
   type ProgressStep,
 } from '../stores/agentChatStore';
-import { downloadSession, formatSessionAsMarkdown } from '../utils/chatExport';
 import type { ChatFollowUpContext } from '../utils/chatFollowUp';
 import {
   buildFollowUpPrompt,
@@ -28,6 +27,8 @@ import { getReportText } from '../utils/reportLanguage';
 import { extractStockCodesFromMessage } from '../utils/chatStockCode';
 import { findMatchingStockCode, includesStockCode, normalizeStockCode } from '../utils/stockCode';
 import { SessionSidebar } from './chat/SessionSidebar';
+import { ChatHeader } from './chat/ChatHeader';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 // Quick question examples shown on empty state
 const QUICK_QUESTIONS = [
@@ -158,12 +159,7 @@ const ChatPage: React.FC = () => {
   const [mobileSkillPickerOpen, setMobileSkillPickerOpen] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sending, setSending] = useState(false);
   const [isFollowUpContextLoading, setIsFollowUpContextLoading] = useState(false);
-  const [sendToast, setSendToast] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
   const [contextCompressionEnabled, setContextCompressionEnabled] = useState(false);
   const [contextCompressionLoaded, setContextCompressionLoaded] = useState(false);
   const [contextCompressionSaving, setContextCompressionSaving] = useState(false);
@@ -182,7 +178,6 @@ const ChatPage: React.FC = () => {
   const messagesViewportRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(true);
-  const sendToastTimerRef = useRef<number | null>(null);
   const followUpHydrationTokenRef = useRef(0);
   const followUpContextRef = useRef<ChatFollowUpContext | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -190,14 +185,12 @@ const ChatPage: React.FC = () => {
 
   // Get localized text (default to Chinese)
   const text = getReportText('zh');
+  const isMobile = useIsMobile();
 
   // Cleanup timers on unmount
   useEffect(() => {
     const timers = copyResetTimerRef.current;
     return () => {
-      if (sendToastTimerRef.current !== null) {
-        window.clearTimeout(sendToastTimerRef.current);
-      }
       Object.values(timers).forEach((timerId) => {
         if (timerId !== undefined) {
           window.clearTimeout(timerId);
@@ -612,17 +605,6 @@ const ChatPage: React.FC = () => {
     handleSend(q.label, [q.skill]);
   };
 
-  const showSendFeedback = useCallback((nextToast: { type: 'success' | 'error'; message: string }, durationMs: number) => {
-    if (sendToastTimerRef.current !== null) {
-      window.clearTimeout(sendToastTimerRef.current);
-    }
-    setSendToast(nextToast);
-    sendToastTimerRef.current = window.setTimeout(() => {
-      setSendToast(null);
-      sendToastTimerRef.current = null;
-    }, durationMs);
-  }, []);
-
   const toggleThinking = (msgId: string) => {
     setExpandedThinking((prev) => {
       const next = new Set(prev);
@@ -800,151 +782,7 @@ const ChatPage: React.FC = () => {
 
       {/* Main chat area */}
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="mb-4 flex-shrink-0 space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <button
-                data-testid="chat-sidebar-toggle"
-                onClick={() => setSidebarOpen(true)}
-                className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-hover transition-colors text-secondary-text hover:text-foreground"
-                aria-label="历史对话"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                </svg>
-              </button>
-              <svg
-                className="w-6 h-6 text-cyan"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                />
-              </svg>
-              问股
-            </h1>
-            {messages.length > 0 && (
-              <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
-                <Tooltip content="导出会话为 Markdown 文件">
-                  <span className="inline-flex">
-                    <Button
-                      variant="action-primary"
-                      size="sm"
-                      onClick={() => downloadSession(messages)}
-                      aria-label="导出会话为 Markdown 文件"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
-                      导出会话
-                    </Button>
-                  </span>
-                </Tooltip>
-                <Tooltip content="发送到已配置的通知机器人/邮箱">
-                  <span className="inline-flex">
-                    <Button
-                      variant="action-primary"
-                      size="sm"
-                      disabled={sending}
-                      onClick={async () => {
-                        if (sending) return;
-                        setSending(true);
-                        setSendToast(null);
-                        try {
-                          const content = formatSessionAsMarkdown(messages);
-                          await agentApi.sendChat(content);
-                          showSendFeedback({ type: 'success', message: '已发送到通知渠道' }, 3000);
-                        } catch (err) {
-                          const parsed = getParsedApiError(err);
-                          showSendFeedback({
-                            type: 'error',
-                            message: parsed.message || '发送失败',
-                          }, 5000);
-                        } finally {
-                          setSending(false);
-                        }
-                      }}
-                      aria-label="发送到已配置的通知机器人/邮箱"
-                    >
-                      {sending ? (
-                        <svg
-                          className="w-4 h-4 animate-spin"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                          />
-                        </svg>
-                      )}
-                      发送
-                    </Button>
-                  </span>
-                </Tooltip>
-              </div>
-            )}
-          </div>
-          <p className="text-secondary-text text-sm">
-            向 AI 询问个股分析，获取基于技能视角的交易建议与实时决策报告。
-          </p>
-          {sendToast ? (
-            <InlineAlert
-              variant={sendToast.type === 'success' ? 'success' : 'danger'}
-              title={sendToast.type === 'success' ? '发送成功' : '发送失败'}
-              message={sendToast.message}
-              className="max-w-md rounded-xl px-3 py-2 text-xs shadow-none"
-            />
-          ) : null}
-        </header>
+        <ChatHeader onToggleSidebar={() => setSidebarOpen(true)} isMobile={isMobile} />
 
         <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden border border-white/6 bg-card/78 glass-card">
           {/* Messages */}
