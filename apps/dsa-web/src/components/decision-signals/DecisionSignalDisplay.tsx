@@ -490,13 +490,13 @@ export const PortfolioSignalSummary: React.FC<PortfolioSignalSummaryProps> = ({ 
   }
   const actionLabel = getActionLabel(item, t);
   return (
-    <div className="min-w-[11rem] max-w-[18rem] text-left">
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
+    <div className="sm:min-w-[11rem] sm:max-w-[18rem] text-left">
+      <div className="flex flex-wrap items-center sm:justify-end gap-1.5">
         <Badge variant={getActionVariant(item)}>{actionLabel}</Badge>
         {item.horizon ? <span className="text-[11px] text-secondary-text">{getDecisionSignalHorizonLabel(item.horizon, t)}</span> : null}
       </div>
-      {item.riskSummary ? <p className="mt-1 line-clamp-2 text-[11px] text-warning">{item.riskSummary}</p> : null}
-      {item.watchConditions ? <p className="mt-1 line-clamp-2 text-[11px] text-secondary-text">{item.watchConditions}</p> : null}
+      {item.riskSummary ? <p className="mt-1 sm:line-clamp-2 text-[11px] text-warning">{item.riskSummary}</p> : null}
+      {item.watchConditions ? <p className="mt-1 sm:line-clamp-2 text-[11px] text-secondary-text">{item.watchConditions}</p> : null}
     </div>
   );
 };

@@ -215,4 +215,16 @@ describe('DecisionSignalDetails', () => {
     expect(screen.getByText('10 days')).toBeInTheDocument();
     expect(screen.queryByText('10d')).not.toBeInTheDocument();
   });
+
+  it('renders full risk summary and watch conditions text in the DOM', () => {
+    const longRisk = '短期均线多头排列，成交量放大，但 RSI 接近超买区域，注意回调风险。板块整体走强，资金流入明显。';
+    const longWatch = '突破前高 10.80 后回踩不破 10.50；日线 MACD 金叉有效。';
+    render(
+      <UiLanguageProvider>
+        <PortfolioSignalSummary item={{ ...signal, riskSummary: longRisk, watchConditions: longWatch }} />
+      </UiLanguageProvider>,
+    );
+    expect(screen.getByText(longRisk)).toBeInTheDocument();
+    expect(screen.getByText(longWatch)).toBeInTheDocument();
+  });
 });
