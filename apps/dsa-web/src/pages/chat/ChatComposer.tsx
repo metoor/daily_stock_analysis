@@ -3,6 +3,7 @@ import { Plus, X, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { ApiErrorAlert, Button, InlineAlert } from '../../components/common';
 import type { SkillInfo } from '../../api/agent';
 import { systemConfigApi } from '../../api/systemConfig';
+import { getParsedApiError } from '../../api/error';
 import { useAgentChatStore } from '../../stores/agentChatStore';
 import { cn } from '../../utils/cn';
 
@@ -58,24 +59,28 @@ export function ChatComposer({
   const [configVersion, setConfigVersion] = useState('');
   const [maskToken, setMaskToken] = useState('******');
 
-  const updateContextCompressionEnabled = useCallback(async (enabled: boolean) => {
+  const updateContextCompressionEnabled = useCallback(async (nextEnabled: boolean) => {
     if (!contextCompressionLoaded || contextCompressionSaving) return;
+    const previousEnabled = contextCompressionEnabled;
+    setContextCompressionEnabled(nextEnabled);
     setContextCompressionSaving(true);
     setContextCompressionError(null);
     try {
-      await systemConfigApi.update({
+      const result = await systemConfigApi.update({
         configVersion,
         maskToken,
         reloadNow: true,
-        items: [{ key: CONTEXT_COMPRESSION_CONFIG_KEY, value: enabled ? 'true' : 'false' }],
+        items: [{ key: CONTEXT_COMPRESSION_CONFIG_KEY, value: nextEnabled ? 'true' : 'false' }],
       });
-      setContextCompressionEnabled(enabled);
-    } catch (err) {
-      setContextCompressionError(err instanceof Error ? err.message : '保存失败');
+      setConfigVersion(result.configVersion || configVersion);
+    } catch (error) {
+      setContextCompressionEnabled(previousEnabled);
+      const parsed = getParsedApiError(error);
+      setContextCompressionError(parsed.message || '上下文压缩设置保存失败');
     } finally {
       setContextCompressionSaving(false);
     }
-  }, [contextCompressionLoaded, contextCompressionSaving, configVersion, maskToken]);
+  }, [contextCompressionLoaded, contextCompressionSaving, contextCompressionEnabled, configVersion, maskToken]);
 
   useEffect(() => {
     let active = true;
@@ -87,10 +92,13 @@ export function ChatComposer({
         setConfigVersion(cfg.configVersion);
         setMaskToken(cfg.maskToken || '******');
         setContextCompressionLoaded(true);
+        setContextCompressionError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!active) return;
-        setContextCompressionLoaded(true);
+        const parsed = getParsedApiError(error);
+        setContextCompressionLoaded(false);
+        setContextCompressionError(parsed.message || '无法读取上下文压缩配置');
       });
     return () => { active = false; };
   }, []);

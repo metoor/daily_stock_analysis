@@ -5,10 +5,13 @@ import { ChatComposer } from '../ChatComposer';
 vi.mock('../../../api/agent', () => ({
   agentApi: { getSkills: vi.fn().mockResolvedValue([]) },
 }));
+vi.mock('../../../api/error', () => ({
+  getParsedApiError: vi.fn(() => ({ message: 'fail' })),
+}));
 vi.mock('../../../api/systemConfig', () => ({
   systemConfigApi: {
-    getConfig: vi.fn().mockResolvedValue({ items: [], configVersion: '', maskToken: '******' }),
-    update: vi.fn().mockResolvedValue(undefined),
+    getConfig: vi.fn().mockResolvedValue({ items: [{ key: 'AGENT_CONTEXT_COMPRESSION_ENABLED', value: 'false' }], configVersion: 'cfg-v1', maskToken: '******' }),
+    update: vi.fn().mockResolvedValue({ configVersion: 'cfg-v2' }),
   },
 }));
 
