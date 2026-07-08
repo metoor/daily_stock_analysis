@@ -185,7 +185,9 @@ async function loadPortfolioSignalLookup(lookup: PortfolioSignalLookup): Promise
 
 const PortfolioPage: React.FC = () => {
   const { language, t } = useUiLanguage();
-  const { riseClass, fallClass } = useColorScheme();
+  const { scheme, riseClass, fallClass } = useColorScheme();
+  const riseBadgeVariant = scheme === 'red_up' ? 'danger' : 'success';
+  const fallBadgeVariant = scheme === 'red_up' ? 'success' : 'danger';
   const isMobile = useIsMobile();
   const text = PORTFOLIO_TEXT[language];
   const decisionActionLabels = useMemo(() => buildDecisionActionLabelMap(t), [t]);
@@ -1223,7 +1225,7 @@ const PortfolioPage: React.FC = () => {
                           ) : null}
                           <div className="mt-0.5 text-xs text-secondary">{row.accountName}</div>
                         </div>
-                        <Badge variant={hasPositionPrice(row) && row.unrealizedPnlPct !== null && row.unrealizedPnlPct !== undefined ? (row.unrealizedPnlPct >= 0 ? 'success' : 'danger') : 'default'}>
+                        <Badge variant={hasPositionPrice(row) && row.unrealizedPnlPct !== null && row.unrealizedPnlPct !== undefined ? (row.unrealizedPnlPct >= 0 ? riseBadgeVariant : fallBadgeVariant) : 'default'}>
                           {formatSignedPct(row.unrealizedPnlPct)}
                         </Badge>
                       </div>
