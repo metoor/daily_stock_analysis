@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, X, SlidersHorizontal, ChevronDown } from 'lucide-react';
-import { ApiErrorAlert, Button, InlineAlert } from '../../components/common';
+import { Button, InlineAlert } from '../../components/common';
 import type { SkillInfo } from '../../api/agent';
 import { systemConfigApi } from '../../api/systemConfig';
 import { getParsedApiError } from '../../api/error';
@@ -48,7 +48,6 @@ export function ChatComposer({
   isFollowUpContextLoading,
 }: ChatComposerProps) {
   const loading = useAgentChatStore((s) => s.loading);
-  const chatError = useAgentChatStore((s) => s.chatError);
 
   const [showSkillDesc, setShowSkillDesc] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -333,7 +332,6 @@ export function ChatComposer({
   return (
     <div className="border-t border-white/6 bg-card/88 p-4 md:p-6 relative z-20">
       <div className="space-y-3">
-        {chatError ? <ApiErrorAlert error={chatError} /> : null}
         {isFollowUpContextLoading ? (
           <InlineAlert
             variant="info"

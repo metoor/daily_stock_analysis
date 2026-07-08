@@ -189,7 +189,7 @@ export function MessageList({
 
   return (
     <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden border border-white/6 bg-card/78 glass-card">
-      {chatError && isMobile && (
+      {chatError && (
         <div className="sticky top-0 z-20 border-b border-white/6 bg-card/95 backdrop-blur">
           <ApiErrorAlert error={chatError} />
         </div>
