@@ -131,6 +131,7 @@ const OVERFLOW_PAGES = [
   { name: 'login', path: '/login', requiresAuth: false },
   { name: 'backtest', path: '/backtest', requiresAuth: true },
   { name: 'alerts', path: '/alerts', requiresAuth: true },
+  { name: 'portfolio', path: '/portfolio', requiresAuth: true },
   { name: 'usage', path: '/usage', requiresAuth: true },
   { name: 'settings', path: '/settings', requiresAuth: true },
 ];

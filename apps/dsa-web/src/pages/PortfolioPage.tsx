@@ -1247,8 +1247,8 @@ const PortfolioPage: React.FC = () => {
                         <dd className={hasPositionPrice(row) ? (row.unrealizedPnlBase >= 0 ? riseClass : fallClass) : 'text-secondary'}>
                           {formatPositionMoney(row.unrealizedPnlBase, row)}
                         </dd>
-                        <dt className="text-secondary">{t('decisionSignals.portfolioColumn')}</dt>
-                        <dd className="text-secondary">
+                        <dt className="text-secondary col-span-2">{t('decisionSignals.portfolioColumn')}</dt>
+                        <dd className="text-secondary col-span-2">
                           <PortfolioSignalSummary item={signal} loading={portfolioSignalsLoading} />
                         </dd>
                       </dl>
