@@ -229,7 +229,6 @@ export function ChatComposer({
   if (isMobile) {
     return (
       <div className="sticky bottom-0 z-20 border-t border-white/6 bg-card/88 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
-        {chatError && <ApiErrorAlert error={chatError} />}
         {isFollowUpContextLoading && (
           <InlineAlert
             variant="info"
