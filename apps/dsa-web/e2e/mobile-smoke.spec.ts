@@ -148,3 +148,66 @@ for (const page of OVERFLOW_PAGES) {
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   });
 }
+
+test.describe('ChatPage mobile interactions', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('chat page has no horizontal overflow on mobile', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/chat');
+    await browserPage.waitForLoadState('domcontentloaded');
+    await browserPage.waitForTimeout(500);
+    const scrollWidth = await browserPage.evaluate(() => document.documentElement.scrollWidth);
+    const clientWidth = await browserPage.evaluate(() => document.documentElement.clientWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+
+  test('quick questions render in 2-column grid on mobile', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/chat');
+    await browserPage.waitForLoadState('domcontentloaded');
+
+    const firstQuickBtn = browserPage.getByText('用缠论分析茅台');
+    const container = firstQuickBtn.locator('..');
+    await expect(container).toHaveClass(/grid-cols-2/);
+  });
+
+  test('composer + button toggles expansion drawer', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/chat');
+    await browserPage.waitForLoadState('domcontentloaded');
+
+    const expandBtn = browserPage.getByLabel('展开更多选项');
+    await expect(expandBtn).toBeVisible();
+    await expandBtn.click();
+
+    const drawer = browserPage.getByTestId('chat-composer-drawer');
+    await expect(drawer).toBeVisible();
+  });
+
+  test('session sidebar drawer width is 85vw on mobile', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/chat');
+    await browserPage.waitForLoadState('domcontentloaded');
+
+    const toggleButton = browserPage.getByTestId('chat-sidebar-toggle');
+    await toggleButton.click();
+
+    const drawer = browserPage.locator('.fixed.inset-0.z-40 .relative.h-full');
+    await expect(drawer).toBeVisible();
+    const box = await drawer.boundingBox();
+    expect(box?.width).toBeGreaterThan(320);
+    expect(box?.width).toBeLessThanOrEqual(332);
+  });
+
+  test('message list renders without horizontal overflow', async ({ page: browserPage }) => {
+    await login(browserPage);
+    await browserPage.goto('/chat');
+    await browserPage.waitForLoadState('domcontentloaded');
+
+    const scrollArea = browserPage.locator('[data-testid="chat-message-scroll"]');
+    const scrollWidth = await scrollArea.evaluate((el) => el.scrollWidth);
+    const clientWidth = await scrollArea.evaluate((el) => el.clientWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+});
