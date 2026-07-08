@@ -12,7 +12,8 @@ import {
   type AlertTypeFilter,
 } from '../components/alerts/AlertRuleList';
 import { AlertTriggerHistory } from '../components/alerts/AlertTriggerHistory';
-import { ApiErrorAlert, AppPage, Card, EmptyState, InlineAlert, Loading, PageHeader } from '../components/common';
+import { ApiErrorAlert, AppPage, Badge, Card, EmptyState, InlineAlert, Loading, PageHeader } from '../components/common';
+import { useIsMobile } from '../hooks';
 import type {
   AlertNotificationItem,
   AlertRuleCreateRequest,
@@ -98,6 +99,7 @@ function formatNotificationStatus(notification: AlertNotificationItem): string {
 }
 
 const AlertsPage: React.FC = () => {
+  const isMobile = useIsMobile();
   useEffect(() => {
     document.title = '告警中心 - DSA';
   }, []);
@@ -331,8 +333,39 @@ const AlertsPage: React.FC = () => {
           />
         ) : null}
         {!notificationsLoading && notifications.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-left text-sm">
+          isMobile ? (
+            <div className="space-y-3">
+              {notifications.map((notification) => (
+                <Card key={notification.id} variant="bordered" padding="sm" className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-foreground">
+                        {formatNotificationChannel(notification.channel)}
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-text">
+                        {formatDateTime(notification.createdAt)}
+                      </div>
+                    </div>
+                    <Badge variant={notification.success ? 'success' : notification.errorCode === 'cooldown_active' || notification.errorCode === 'cooldown_read_failed' || notification.errorCode === 'noise_suppressed' || notification.errorCode === 'no_channel' ? 'warning' : 'danger'}>
+                      {formatNotificationStatus(notification)}
+                    </Badge>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <dt className="text-muted-text">错误码</dt>
+                    <dd className="text-secondary-text">{notification.errorCode ?? '--'}</dd>
+                    <dt className="text-muted-text">耗时</dt>
+                    <dd className="text-secondary-text">
+                      {notification.latencyMs == null ? '--' : `${notification.latencyMs}ms`}
+                    </dd>
+                    <dt className="text-muted-text">诊断</dt>
+                    <dd className="text-secondary-text">{notification.diagnostics ?? '--'}</dd>
+                  </dl>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[680px] text-left text-sm">
               <thead className="border-b border-border/60 text-xs uppercase text-muted-text">
                 <tr>
                   <th className="px-3 py-2 font-medium">渠道</th>
@@ -356,7 +389,8 @@ const AlertsPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          )
         ) : null}
       </Card>
     </AppPage>

@@ -73,6 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### 测试
 
 - 台股三大法人 fetcher 新增 live-smoke 脚本与 `@pytest.mark.network` 漂移检测测试，用于非阻断 network-smoke 定时任务核对 TWSE T86 / TPEx 核心字段与解析结果。
+- [修复] 台股（tw）市场阶段（`market_phase`）新增收盘集合竞价识别：`_CLOSING_AUCTION_WINDOW_MINUTES` 缺 `tw` 键时 `.get(market, 0)` 得零宽窗口，TWSE/TPEx 13:25–13:30 的 5 分钟收盘竞价此前永远无法判定为 `closing_auction`（收盘前一刻仍 `intraday`、13:30 直接 `postmarket`）；补 `"tw": 5` 修正，附阶段边界回归测试。仅 tw 加项，cn/hk/us 与 jp/kr 行为不变。
+- [改进] Web 前端新增手机与平板 viewport 适配（xs 断点、表格卡片变体、grid 中间断点、移动端 smoke 用例）
+- [测试] Playwright 新增 mobile-chrome (Pixel 5) 与 tablet-chrome (iPad Mini) 项目
 
 ## [3.24.1] - 2026-06-28
 

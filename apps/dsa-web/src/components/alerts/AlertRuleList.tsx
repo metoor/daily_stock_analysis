@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Bell, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Pagination, Select } from '../common';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
+import { useIsMobile } from '../../hooks';
 import { formatUiText, type UiLanguage } from '../../i18n/uiText';
 import {
   ALERT_DIRECTION_LABELS,
@@ -125,6 +126,7 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
   busyRule = null,
 }) => {
   const { language } = useUiLanguage();
+  const isMobile = useIsMobile();
   const text = ALERT_LIST_TEXT[language];
   const [pendingDelete, setPendingDelete] = useState<AlertRuleItem | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -169,8 +171,91 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
           />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left text-sm">
+        isMobile ? (
+          <div className="space-y-3">
+            {rules.map((rule) => (
+              <Card key={rule.id} variant="bordered" padding="sm" className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium text-foreground">{rule.name}</div>
+                    <div className="mt-0.5 text-xs text-muted-text">
+                      {formatUiText(text.source, { source: rule.source })}
+                    </div>
+                  </div>
+                  <Badge variant={rule.enabled ? 'success' : 'default'}>
+                    {rule.enabled ? text.enabled : text.disabled}
+                  </Badge>
+                </div>
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <dt className="text-muted-text">{text.type}</dt>
+                  <dd className="text-secondary-text">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge variant="info">{ALERT_TYPE_LABELS[language][rule.alertType]}</Badge>
+                      <Badge variant={rule.severity === 'critical' ? 'danger' : rule.severity === 'warning' ? 'warning' : 'default'}>
+                        {ALERT_SEVERITY_LABELS[language][rule.severity] ?? rule.severity}
+                      </Badge>
+                    </div>
+                  </dd>
+                  <dt className="text-muted-text">{text.target}</dt>
+                  <dd className="text-secondary-text">
+                    <span className="font-mono">{formatTarget(rule, language)}</span>
+                    <span className="ml-1 text-muted-text">
+                      {ALERT_SCOPE_LABELS[language][rule.targetScope] ?? rule.targetScope}
+                    </span>
+                  </dd>
+                  <dt className="text-muted-text">{text.parameters}</dt>
+                  <dd className="text-secondary-text">{formatParameters(rule, language)}</dd>
+                  <dt className="text-muted-text">{text.cooldown}</dt>
+                  <dd className="text-secondary-text">
+                    <div>{isCoolingDown(rule) ? text.coolingDown : text.notCoolingDown}</div>
+                    <div className="mt-0.5">{formatDateTime(rule.cooldownUntil)}</div>
+                    {hasChildTargetCooldown(rule) ? (
+                      <div className="mt-0.5 text-muted-text">{text.childTargetCooldown}</div>
+                    ) : null}
+                  </dd>
+                  <dt className="text-muted-text">{text.updatedAt}</dt>
+                  <dd className="text-secondary-text">
+                    {formatDateTime(rule.updatedAt ?? rule.createdAt)}
+                  </dd>
+                </dl>
+                <div className="flex justify-end gap-2 border-t border-border/40 pt-2">
+                  <Button
+                    size="xsm"
+                    variant="outline"
+                    onClick={() => onTest(rule)}
+                    isLoading={isRuleActionBusy(rule, 'test')}
+                    loadingText={text.testing}
+                    disabled={isRuleBusy(rule) && !isRuleActionBusy(rule, 'test')}
+                  >
+                    {text.test}
+                  </Button>
+                  <Button
+                    size="xsm"
+                    variant={rule.enabled ? 'secondary' : 'primary'}
+                    onClick={() => onToggleEnabled(rule)}
+                    isLoading={isRuleActionBusy(rule, 'toggle')}
+                    loadingText={rule.enabled ? text.disabling : text.enabling}
+                    disabled={isRuleBusy(rule) && !isRuleActionBusy(rule, 'toggle')}
+                  >
+                    {rule.enabled ? text.disable : text.enable}
+                  </Button>
+                  <Button
+                    size="xsm"
+                    variant="danger-subtle"
+                    aria-label={formatUiText(text.deleteAria, { name: rule.name })}
+                    onClick={() => setPendingDelete(rule)}
+                    disabled={isRuleBusy(rule)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {text.delete}
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-x-auto">
+            <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b border-border/60 text-xs uppercase text-muted-text">
               <tr>
                 <th className="px-3 py-2 font-medium">{text.rule}</th>
@@ -254,7 +339,8 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        )
       )}
 
       <Pagination

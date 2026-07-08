@@ -39,7 +39,8 @@ import {
 } from '../api/alphasift';
 import { formatParsedApiError, getParsedApiError, toApiErrorMessage, type ParsedApiError } from '../api/error';
 import { useColorScheme } from '../hooks/useColorScheme';
-import { AppPage, Button, InlineAlert } from '../components/common';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { AppPage, Button, Card, InlineAlert } from '../components/common';
 
 const MARKETS = [{ id: 'cn', label: 'A 股' }];
 const SCREEN_TASK_STORAGE_KEY = 'dsa.alphasift.activeScreenTask.v1';
@@ -448,6 +449,7 @@ const MiniSparkline: React.FC<{ score?: number | null; selected?: boolean }> = (
 const StockScreeningPage: React.FC = () => {
   const navigate = useNavigate();
   const { riseClass } = useColorScheme();
+  const isMobile = useIsMobile();
   const [restoredTask] = useState<PersistedScreenTask | null>(() => readPersistedScreenTask());
   const [enabled, setEnabled] = useState(false);
   const [available, setAvailable] = useState(false);
@@ -1304,8 +1306,150 @@ const StockScreeningPage: React.FC = () => {
             <p className="mt-2 text-sm text-secondary-text">开启 AlphaSift 后点击“运行选股”生成候选列表。</p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border">
-            <table className="w-full min-w-[860px] border-collapse text-sm">
+          isMobile ? (
+            <div className="space-y-3">
+              {candidates.map((item) => {
+                const expanded = expandedCode === item.code;
+                const llmInsightAvailable = hasLlmInsight(item);
+                const llmFallbackText =
+                  llmDegraded && !llmInsightAvailable
+                    ? '本次 LLM 重排失败或未返回判断，当前展示的是本地因子评分结果。'
+                    : '暂无 LLM 判断';
+                return (
+                  <Card key={`${item.rank}-${item.code}`} variant="bordered" padding="sm" className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-secondary-text">#{item.rank}</span>
+                          <span className="truncate font-mono font-semibold text-foreground">{item.code}</span>
+                        </div>
+                        <div className="mt-0.5 truncate font-medium text-foreground">{item.name || '-'}</div>
+                        <div className="mt-0.5 text-xs text-secondary-text">{item.industry || '-'}</div>
+                      </div>
+                      <span className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
+                        {item.riskLevel || 'unknown'}
+                      </span>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <dt className="text-secondary-text">价格</dt>
+                      <dd className="text-secondary-text">{formatNumber(item.price)}</dd>
+                      <dt className="text-secondary-text">涨跌幅</dt>
+                      <dd className="text-secondary-text">{formatNumber(item.changePct)}%</dd>
+                      <dt className="text-secondary-text">评分</dt>
+                      <dd className="font-bold text-cyan">{formatScore(item.score)}</dd>
+                      <dt className="text-secondary-text">LLM</dt>
+                      <dd className="text-secondary-text">{llmDegraded ? '未重排' : formatScore(item.llmScore)}</dd>
+                    </dl>
+                    <div className="border-t border-border/40 pt-2">
+                      <button
+                        type="button"
+                        className="text-sm font-semibold text-cyan"
+                        onClick={() => setExpandedCode(expanded ? null : item.code)}
+                      >
+                        {expanded ? '收起' : '展开查看'}
+                      </button>
+                    </div>
+                    {expanded ? (
+                      <div className="grid gap-4 border-t border-border/40 pt-3">
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">摘要</p>
+                            <p className="mt-1 text-sm leading-6 text-foreground">{getCandidateReason(item)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">操作信号</p>
+                            <p className="mt-1 text-sm text-foreground">{getSignal(item)}</p>
+                          </div>
+                          {item.dsaAnalysisSummary ? (
+                            <div>
+                              <p className="text-xs font-semibold text-secondary-text">DSA 增强摘要</p>
+                              <p className="mt-1 text-sm leading-6 text-foreground">{item.dsaAnalysisSummary}</p>
+                            </div>
+                          ) : null}
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">LLM 判断</p>
+                            <p className="mt-1 text-sm leading-6 text-foreground">
+                              {item.llmThesis || llmFallbackText}
+                            </p>
+                            {llmInsightAvailable ? (
+                              <p className="mt-1 text-xs text-secondary-text">
+                                板块 {item.llmSector || '-'} · 主题 {item.llmTheme || '-'} · 置信度 {formatPercent(item.llmConfidence)}
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-xs text-secondary-text">LLM 元数据未返回</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">风险标签</p>
+                            <p className="mt-1 text-sm text-foreground">
+                              {[...(item.riskFlags || []), ...(item.llmRisks || [])].length
+                                ? [...(item.riskFlags || []), ...(item.llmRisks || [])].join('，')
+                                : '无'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">主要因子</p>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              {getFactorEntries(item).length > 0 ? (
+                                getFactorEntries(item).map(([key, value]) => (
+                                  <div key={key} className="rounded-lg border border-border bg-card px-3 py-2">
+                                    <span className="block text-xs text-secondary-text">{key}</span>
+                                    <span className="text-sm font-semibold text-foreground">{formatNumber(value)}</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-sm text-secondary-text">无因子明细</span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">成交额</p>
+                            <p className="mt-1 text-sm text-foreground">{formatAmount(item.amount)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">LLM 关注项</p>
+                            <p className="mt-1 text-sm text-foreground">
+                              {item.llmWatchItems?.length ? item.llmWatchItems.join('，') : llmDegraded ? '未返回（LLM 已降级）' : '无'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">催化因素</p>
+                            <p className="mt-1 text-sm text-foreground">
+                              {item.llmCatalysts?.length ? item.llmCatalysts.join('，') : llmDegraded ? '未返回（LLM 已降级）' : '无'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-secondary-text">DSA 新闻</p>
+                            {(item.dsaNews || []).length > 0 ? (
+                              <ul className="mt-1 space-y-1 text-sm text-foreground">
+                                {(item.dsaNews || []).slice(0, 3).map((newsItem, newsIndex) => (
+                                  <li key={`${item.code}-dsa-news-${newsIndex}`}>
+                                    {newsItem.title || newsItem.snippet || '-'}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-1 text-sm text-secondary-text">无</p>
+                            )}
+                          </div>
+                          {(item.dsaContext?.warnings || []).length > 0 ? (
+                            <div>
+                              <p className="text-xs font-semibold text-secondary-text">DSA 增强提示</p>
+                              <p className="mt-1 text-sm text-secondary-text">{(item.dsaContext?.warnings || []).join('，')}</p>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-border">
+              <table className="w-full min-w-[860px] border-collapse text-sm">
               <thead className="bg-surface text-left text-xs text-secondary-text">
                 <tr>
                   <th className="w-14 px-4 py-3 font-semibold">#</th>
@@ -1460,7 +1604,8 @@ const StockScreeningPage: React.FC = () => {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          )
         )}
       </section>
     </AppPage>

@@ -40,6 +40,7 @@ export const Shell: React.FC<ShellProps> = ({ children }) => {
       <div className="pointer-events-none fixed inset-x-0 top-3 z-40 flex items-start justify-between px-3 lg:hidden">
         <button
           type="button"
+          data-testid="mobile-menu-button"
           onClick={() => setMobileOpen(true)}
           className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-card/85 text-secondary-text shadow-soft-card backdrop-blur-md transition-colors hover:bg-hover hover:text-foreground"
           aria-label={t('layout.openNav')}

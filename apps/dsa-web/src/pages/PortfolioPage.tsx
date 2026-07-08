@@ -9,6 +9,7 @@ import { ApiErrorAlert, Card, Badge, ConfirmDialog, EmptyState, InlineAlert } fr
 import { PortfolioSignalSummary } from '../components/decision-signals/DecisionSignalDisplay';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import { useColorScheme } from '../hooks/useColorScheme';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { formatUiText } from '../i18n/uiText';
 import { PORTFOLIO_TEXT } from '../locales/featureText';
 import type { FxRefreshFeedback } from '../utils/portfolioFormat';
@@ -185,6 +186,7 @@ async function loadPortfolioSignalLookup(lookup: PortfolioSignalLookup): Promise
 const PortfolioPage: React.FC = () => {
   const { language, t } = useUiLanguage();
   const { riseClass, fallClass } = useColorScheme();
+  const isMobile = useIsMobile();
   const text = PORTFOLIO_TEXT[language];
   const decisionActionLabels = useMemo(() => buildDecisionActionLabelMap(t), [t]);
 
@@ -1204,8 +1206,67 @@ const PortfolioPage: React.FC = () => {
               className="border-none bg-transparent px-4 py-8 shadow-none"
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-[860px] w-full text-sm">
+            isMobile ? (
+              <div className="space-y-3">
+                {positionRows.map((row) => {
+                  const rowKey = `${row.accountId}-${row.symbol}-${row.market}`;
+                  const analyzing = positionAnalysisLoadingKey === rowKey;
+                  const signal = signalByPositionKey.get(rowKey);
+                  const nameZh = findStockInIndexByCode(row.symbol, stockIndex)?.nameZh;
+                  return (
+                    <Card key={rowKey} variant="bordered" padding="sm" className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono font-semibold text-foreground">{row.symbol}</div>
+                          {nameZh ? (
+                            <div className="mt-0.5 text-xs text-secondary">{nameZh}</div>
+                          ) : null}
+                          <div className="mt-0.5 text-xs text-secondary">{row.accountName}</div>
+                        </div>
+                        <Badge variant={hasPositionPrice(row) && row.unrealizedPnlPct !== null && row.unrealizedPnlPct !== undefined ? (row.unrealizedPnlPct >= 0 ? 'success' : 'danger') : 'default'}>
+                          {formatSignedPct(row.unrealizedPnlPct)}
+                        </Badge>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                        <dt className="text-secondary">{text.quantity}</dt>
+                        <dd className="text-secondary">{row.quantity.toFixed(2)}</dd>
+                        <dt className="text-secondary">{text.avgCost}</dt>
+                        <dd className="text-secondary">{row.avgCost.toFixed(4)}</dd>
+                        <dt className="text-secondary">{text.lastPrice}</dt>
+                        <dd className="text-secondary">
+                          <div>{formatPositionPrice(row)}</div>
+                          <div className={hasPositionPrice(row) ? 'text-secondary' : 'text-warning'}>
+                            {getPositionPriceLabel(row)}
+                          </div>
+                        </dd>
+                        <dt className="text-secondary">{text.marketValue}</dt>
+                        <dd className="text-secondary">{formatPositionMoney(row.marketValueBase, row)}</dd>
+                        <dt className="text-secondary">{text.unrealizedPnl}</dt>
+                        <dd className={hasPositionPrice(row) ? (row.unrealizedPnlBase >= 0 ? riseClass : fallClass) : 'text-secondary'}>
+                          {formatPositionMoney(row.unrealizedPnlBase, row)}
+                        </dd>
+                        <dt className="text-secondary">{t('decisionSignals.portfolioColumn')}</dt>
+                        <dd className="text-secondary">
+                          <PortfolioSignalSummary item={signal} loading={portfolioSignalsLoading} />
+                        </dd>
+                      </dl>
+                      <div className="flex justify-end gap-2 border-t border-border/40 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleAnalyzePosition(row)}
+                          disabled={analyzing}
+                          className="btn-secondary px-2 py-1 text-xs disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {analyzing ? text.submitting : text.analyze}
+                        </button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-[860px] w-full text-sm">
                 <thead className="text-xs text-secondary border-b border-white/10">
                   <tr>
                     <th className="text-left py-2 pr-2">{text.account}</th>
@@ -1286,7 +1347,8 @@ const PortfolioPage: React.FC = () => {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
+            )
           )}
         </Card>
 
