@@ -8,6 +8,8 @@ import type {
   AnalysisReport,
   MarketReviewAccepted,
   MarketReviewRequest,
+  BackfillRequest,
+  BackfillAccepted,
   TaskStatus,
   TaskListResponse,
 } from '../types/analysis';
@@ -120,6 +122,33 @@ export const analysisApi = {
     }
 
     return toCamelCase<MarketReviewAccepted>(response.data);
+  },
+
+  /**
+   * 按指定历史日期补填分析（单股或批量）。异步，返回 task_id。
+   */
+  backfill: async (data: BackfillRequest): Promise<BackfillAccepted> => {
+    const response = await apiClient.post<Record<string, unknown>>(
+      '/api/v1/analysis/backfill',
+      {
+        stock_codes: data.stockCodes,
+        target_date: data.targetDate,
+        force: data.force ?? false,
+        report_type: data.reportType ?? 'detailed',
+        notify: data.notify ?? false,
+      },
+      { validateStatus: (status) => status === 202 || status === 400 }
+    );
+
+    if (response.status === 400) {
+      const detail = response.data?.detail;
+      const message = detail && typeof detail === 'object' && 'message' in detail
+        ? String((detail as { message?: unknown }).message || '')
+        : String(response.data?.message || '参数错误');
+      throw new Error(message || '补填参数错误');
+    }
+
+    return toCamelCase<BackfillAccepted>(response.data);
   },
 
   /**
