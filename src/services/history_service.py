@@ -278,6 +278,14 @@ class HistoryService:
         }
 
     @staticmethod
+    def _extract_backfilled(context_snapshot: Any) -> bool:
+        snapshot = parse_json_field(context_snapshot)
+        if not isinstance(snapshot, dict):
+            return False
+        enhanced = snapshot.get("enhanced_context")
+        return isinstance(enhanced, dict) and "backfill" in enhanced
+
+    @staticmethod
     def _display_stock_code(raw_code: Any) -> str:
         code = str(raw_code or "").strip()
         if not code:
@@ -318,6 +326,7 @@ class HistoryService:
             "model_used": normalize_model_used(model_used),
             "created_at": record.created_at.isoformat() if record.created_at else None,
             "market_phase_summary": market_phase_summary,
+            "backfilled": self._extract_backfilled(getattr(record, "context_snapshot", None)),
             **market_fields,
         }
 

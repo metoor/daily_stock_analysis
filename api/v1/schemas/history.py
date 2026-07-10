@@ -46,6 +46,7 @@ class HistoryItem(BaseModel):
         None,
         description="本次分析市场阶段低敏摘要",
     )
+    backfilled: bool = Field(False, description="是否为按日期补填的回填记录")
     created_at: Optional[str] = Field(None, description="创建时间")
     
     model_config = ConfigDict(json_schema_extra={

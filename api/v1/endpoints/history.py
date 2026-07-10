@@ -205,6 +205,7 @@ def get_history_list(
                 model_used=item.get("model_used"),
                 created_at=item.get("created_at"),
                 market_phase_summary=item.get("market_phase_summary"),
+                backfilled=item.get("backfilled"),
             )
             for item in result.get("items", [])
         ]
