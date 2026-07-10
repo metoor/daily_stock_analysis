@@ -139,6 +139,8 @@ class AnalysisRepository:
         from src.repositories.backtest_repo import BacktestRepository
         from src.utils.data_processing import parse_json_field
 
+        # Window intentionally spans back to target_date because the real record was created around then;
+        # limit=500 + code-indexed query bounds the cost.
         days = max(1, (date.today() - target_date).days + 3)
         try:
             records = self.db.get_analysis_history(code=code, days=days, limit=500)

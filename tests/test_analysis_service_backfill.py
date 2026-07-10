@@ -35,6 +35,8 @@ def test_force_overrides_existing_record():
         Pipe.return_value.process_single_stock.return_value = None
         result = svc.backfill_as_of_date(["600519"], date(2026, 6, 10), force=True)
     assert result["skipped"] == 0
+    assert result["errors"] == 1
+    assert result["saved"] == 0
     Pipe.return_value.process_single_stock.assert_called_once()
 
 

@@ -135,7 +135,6 @@ export const analysisApi = {
         target_date: data.targetDate,
         force: data.force ?? false,
         report_type: data.reportType ?? 'detailed',
-        notify: data.notify ?? false,
       },
       { validateStatus: (status) => status === 202 || status === 400 }
     );

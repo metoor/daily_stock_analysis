@@ -42,7 +42,6 @@ export interface BackfillRequest {
   targetDate: string;  // YYYY-MM-DD
   force?: boolean;
   reportType?: string;
-  notify?: boolean;
 }
 
 export interface BackfillAccepted {

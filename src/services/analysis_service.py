@@ -179,12 +179,14 @@ class AnalysisService:
             return {"processed": 0, "saved": 0, "skipped": 0, "errors": 0,
                     "message": "stock_codes 不能为空", "diagnostics": {}}
 
+        if target_date >= today:
+            return {"processed": 0, "saved": 0, "skipped": 0,
+                    "errors": len(stock_codes),
+                    "message": "目标日期须早于今天（未收盘/未来日期不接受）",
+                    "diagnostics": {}}
+
         for code in stock_codes:
-            if target_date >= today:
-                errors += 1
-                skip_reasons.append(f"{code}: 目标日期须早于今天（未收盘/未来日期不接受）")
-                continue
-            market = get_market_for_stock(normalize_stock_code(code))
+            market = get_market_for_stock(normalize_stock_code(code)) or "cn"
             if not is_market_open(market, target_date):
                 errors += 1
                 skip_reasons.append(f"{code}: {target_date} 非该市场交易日（或日历不可用）")

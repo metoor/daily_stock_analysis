@@ -595,7 +595,8 @@ def trigger_market_review(
     summary="按指定历史日期补填分析",
     description=(
         "以 target_date 为基准生成一条「价格基准、无新闻/基本面、标记为回填」的分析记录，"
-        "补齐回测缺失日期。异步执行，返回 task_id 供轮询。"
+        "补齐回测缺失日期。force=true 时忽略查重并重新执行（可能与该日已有记录共存）。"
+        "异步执行，返回 task_id 供轮询。"
     ),
 )
 def trigger_backfill(request: BackfillRequest) -> BackfillAccepted:

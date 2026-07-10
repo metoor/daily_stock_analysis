@@ -150,11 +150,10 @@ class BackfillRequest(BaseModel):
         ..., description="目标历史日期 YYYY-MM-DD，须早于今天且为交易日",
         json_schema_extra={"example": "2026-06-10"},
     )
-    force: bool = Field(False, description="强制覆盖该日已有真实记录")
+    force: bool = Field(False, description="强制忽略查重并重新执行（可能与该日已有记录共存）")
     report_type: str = Field(
         "detailed", description="报告类型", pattern="^(simple|detailed|full|brief)$"
     )
-    notify: bool = Field(False, description="是否发送推送通知（默认不发）")
 
 
 class BackfillAccepted(BaseModel):
