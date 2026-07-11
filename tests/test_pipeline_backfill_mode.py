@@ -1,23 +1,53 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime, date
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pandas as pd
 import pytest
 
 
-def _build_pipeline_with_mocks():
+def _build_pipeline_with_real_db():
+    """真实内存 db + 真实 pipeline.db 取数路径，仅 mock LLM/网络/趋势分析。"""
     from src.core.pipeline import StockAnalysisPipeline
     from src.config import Config
+    from src.storage import DatabaseManager
+
+    DatabaseManager.reset_instance()
+    db = DatabaseManager(db_url="sqlite:///:memory:")
+
+    target = date(2026, 6, 10)
+    rows = []
+    for i in range(10):
+        d = date(2026, 6, 1) + timedelta(days=i)
+        rows.append({
+            "date": d,
+            "open": 9.0 + i * 0.1,
+            "high": 10.0 + i * 0.1,
+            "low": 8.5 + i * 0.1,
+            "close": 9.5 + i * 0.1,
+            "volume": 1000.0 + i * 100,
+            "pct_chg": 1.0 + i * 0.1,
+            "ma5": 9.0,
+            "ma10": 8.8,
+            "ma20": 8.5,
+        })
+    df = pd.DataFrame(rows)
+    df["code"] = "600519"
+    db.save_daily_data(df, "600519", "test")
 
     pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)
+    pipeline.db = db
     pipeline.config = MagicMock(spec=Config)
     pipeline.config.enable_realtime_quote = True
     pipeline.config.report_language = "zh"
     pipeline.config.agent_mode = False
     pipeline.config.agent_skills = []
     pipeline.config.fundamental_stage_timeout_seconds = 1
-    pipeline.query_source = "api"
+    pipeline.config.daily_market_context_enabled = False
+    pipeline.config.market_review_enabled = False
+    pipeline.config.litellm_model = "test-model"
+    pipeline.query_source = "backfill"
     pipeline.analysis_phase = "auto"
     pipeline.analysis_skills = None
     pipeline.save_context_snapshot = True
@@ -34,18 +64,6 @@ def _build_pipeline_with_mocks():
     pipeline.search_service.is_available = True
     pipeline.search_service.search_comprehensive_intel = MagicMock(return_value={})
     pipeline.social_sentiment_service = None
-
-    pipeline.db = MagicMock()
-    # 返回一根 bar，使 context['date'] 落到目标日
-    bar = SimpleNamespace(
-        to_dict=lambda: {
-            "date": "2026-06-10", "close": 10.0, "open": 9.5,
-            "high": 10.2, "low": 9.4, "volume": 1000, "pct_chg": 1.0,
-        }
-    )
-    pipeline.db.get_data_range.return_value = [bar]
-    pipeline.db.save_fundamental_snapshot = MagicMock()
-    pipeline.db.save_analysis_history.return_value = 1
 
     pipeline.trend_analyzer = MagicMock()
     pipeline.trend_analyzer.analyze.return_value = SimpleNamespace(
@@ -73,7 +91,7 @@ def _build_pipeline_with_mocks():
             success=True, code="600519", name="测试股",
             current_price=None, change_pct=None, query_id="q",
             operation_advice="持有", sentiment_score=60,
-            model_used="m", report_language="zh",
+            model_used="test-model", report_language="zh",
             analysis_summary="", news_summary="", technical_analysis="",
             fundamental_analysis="", risk_warning="", to_dict=lambda: {},
             error_message=None,
@@ -82,62 +100,57 @@ def _build_pipeline_with_mocks():
     pipeline.analyzer = MagicMock()
     pipeline.analyzer.analyze = _fake_analyze
     pipeline._emit_progress = MagicMock()
+    db.save_analysis_history = MagicMock(return_value=1)
+    db.save_fundamental_snapshot = MagicMock()
 
-    def _fake_get_context(code):
-        return {
-            "code": code,
-            "date": "2026-06-10",
-            "today": {
-                "date": "2026-06-10",
-                "close": 10.0,
-                "open": 9.5,
-                "high": 10.2,
-                "low": 9.4,
-                "volume": 1000,
-                "pct_chg": 1.0,
-            },
-            "yesterday": {
-                "date": "2026-06-09",
-                "close": 9.9,
-                "open": 9.8,
-                "high": 10.0,
-                "low": 9.7,
-                "volume": 900,
-                "pct_chg": 0.5,
-            },
-        }
-
-    pipeline._get_analysis_context_with_market_fallback = _fake_get_context
-    return pipeline, captured
+    return pipeline, captured, target
 
 
-def test_backfill_mode_skips_intelligence_and_stamps_marker():
-    pipeline, captured = _build_pipeline_with_mocks()
-    target = date(2026, 6, 10)
-
+def test_backfill_uses_target_date_context():
+    pipeline, captured, target = _build_pipeline_with_real_db()
     pipeline.analyze_stock(
         code="600519",
         report_type=SimpleNamespace(value="detailed"),
         query_id="q1",
-        current_time=datetime.combine(target, datetime.min.time()),
+        target_date=target,
         backfill_mode=True,
     )
-
-    pipeline.search_service.search_comprehensive_intel.assert_not_called()
     ec = captured["enhanced_context"]
-    assert "backfill" in ec
-    assert ec["backfill"]["data_scope"] == "price_only"
-    assert ec["realtime"]["price"] == 10.0
+    assert ec["date"] == "2026-06-10"
+    assert ec["today"]["date"] == date(2026, 6, 10)
+    assert ec["today"]["close"] == 10.4
+    assert ec["backfill"]["target_date"] == "2026-06-10"
+    assert ec["realtime"]["price"] == 10.4
+    assert ec["realtime"]["change_pct"] == 1.9
+    pipeline.search_service.search_comprehensive_intel.assert_not_called()
 
 
-def test_normal_mode_does_not_set_backfill_marker():
-    pipeline, captured = _build_pipeline_with_mocks()
-    pipeline.analyze_stock(
+def test_backfill_missing_target_bar_returns_none():
+    pipeline, captured, target = _build_pipeline_with_real_db()
+    from src.storage import StockDaily
+    with pipeline.db.get_session() as session:
+        session.query(StockDaily).filter(
+            StockDaily.code == "600519",
+            StockDaily.date == target,
+        ).delete()
+        session.commit()
+    result = pipeline.analyze_stock(
         code="600519",
         report_type=SimpleNamespace(value="detailed"),
         query_id="q2",
+        target_date=target,
+        backfill_mode=True,
+    )
+    assert result is None
+
+
+def test_normal_mode_does_not_set_backfill_marker():
+    pipeline, captured, _ = _build_pipeline_with_real_db()
+    pipeline.analyze_stock(
+        code="600519",
+        report_type=SimpleNamespace(value="detailed"),
+        query_id="q3",
         current_time=None,
         backfill_mode=False,
     )
     assert "backfill" not in captured["enhanced_context"]
-

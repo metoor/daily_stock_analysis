@@ -364,6 +364,7 @@ class StockAnalysisPipeline:
         query_id: str,
         current_time: Optional[datetime] = None,
         backfill_mode: bool = False,
+        target_date: Optional[date] = None,
     ) -> Optional[AnalysisResult]:
         """
         分析单只股票（增强版：含量比、换手率、筹码分析、多维度情报）
@@ -619,9 +620,15 @@ class StockAnalysisPipeline:
 
             # Step 5: 获取分析上下文（技术面数据）
             self._emit_progress(58, f"{stock_name}：正在整理分析上下文")
-            context = self._get_analysis_context_with_market_fallback(code)
+            if backfill_mode and target_date is not None:
+                context = self.db.get_analysis_context_as_of(code, target_date)
+            else:
+                context = self._get_analysis_context_with_market_fallback(code)
 
             if context is None:
+                if backfill_mode and target_date is not None:
+                    logger.warning(f"[{code}] backfill: 无 {target_date} 行情数据，跳过")
+                    return None
                 logger.warning(f"{stock_name}({code}) 无法获取历史行情数据，将仅基于新闻和实时行情分析")
                 _mkt_date = get_market_now(
                     get_market_for_stock(normalize_stock_code(code))
@@ -655,9 +662,9 @@ class StockAnalysisPipeline:
             if portfolio_context is not None:
                 enhanced_context["portfolio_context"] = dict(portfolio_context)
 
-            if backfill_mode:
+            if backfill_mode and target_date is not None:
                 enhanced_context["backfill"] = {
-                    "target_date": context.get("date"),
+                    "target_date": target_date.isoformat(),
                     "data_scope": "price_only",
                     "created_at": datetime.now().isoformat(),
                 }
@@ -2774,6 +2781,7 @@ class StockAnalysisPipeline:
         analysis_query_id: Optional[str] = None,
         current_time: Optional[datetime] = None,
         backfill_mode: bool = False,
+        target_date: Optional[date] = None,
     ) -> Optional[AnalysisResult]:
         """
         处理单只股票的完整流程
@@ -2793,6 +2801,8 @@ class StockAnalysisPipeline:
             single_stock_notify: 是否启用单股推送模式（每分析完一只立即推送）
             report_type: 报告类型枚举（从配置读取，Issue #119）
             current_time: 本轮运行冻结的参考时间，用于统一断点续传目标交易日判断
+            backfill_mode: 回填模式，冻结日期由 target_date 直接接管
+            target_date: 回填目标日期（backfill_mode=True 时必填），直接冻结到该日
 
         Returns:
             AnalysisResult 或 None
@@ -2800,7 +2810,10 @@ class StockAnalysisPipeline:
         logger.info(f"========== 开始处理 {code} ==========")
 
         from src.services.history_loader import set_frozen_target_date, reset_frozen_target_date
-        frozen_td = self._resolve_resume_target_date(code, current_time=current_time)
+        if backfill_mode and target_date is not None:
+            frozen_td = target_date
+        else:
+            frozen_td = self._resolve_resume_target_date(code, current_time=current_time)
         token = set_frozen_target_date(frozen_td)
         effective_query_id = analysis_query_id or getattr(self, "query_id", None) or uuid.uuid4().hex
         effective_trace_id = getattr(self, "trace_id", None) or effective_query_id
@@ -2835,6 +2848,8 @@ class StockAnalysisPipeline:
                 analyze_kwargs["current_time"] = current_time
             if backfill_mode:
                 analyze_kwargs["backfill_mode"] = True
+                if target_date is not None:
+                    analyze_kwargs["target_date"] = target_date
             result = self.analyze_stock(code, report_type, **analyze_kwargs)
             
             if result and result.success:
