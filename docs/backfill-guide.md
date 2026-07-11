@@ -31,3 +31,9 @@ curl -X POST http://127.0.0.1:8000/api/v1/analysis/backfill \
 ```
 
 返回 `202 {task_id, ...}`，轮询 `GET /api/v1/analysis/status/{task_id}` 查进度。
+
+## 6. 已知限制
+
+- **X 日 K 线缺失时 backfill 计 errors**：`get_analysis_context_as_of` 要求 `target_date` 当日 bar 与前一交易日 bar 均存在，任一缺失即返回 `None`，该股计入 `errors`。需先确保 X 日行情已入库（可先跑一次正常当日分析或手动补行情）。
+- **回填记录的 `enhanced_context.date = X`**：回填记录的 `context_snapshot.enhanced_context.date` 严格等于用户选择的 `target_date`，回测据此归类。回填记录同时带 `backfill.target_date` 标记，与 `enhanced_context.date` 一致。
+- **非忠实复现**：回填记录基于 X 日价格历史 + 今日模型生成，不含历史新闻/基本面，不等同于当天真实分析。
