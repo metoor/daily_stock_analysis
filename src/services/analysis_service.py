@@ -213,7 +213,7 @@ class AnalysisService:
                     skip_analysis=False,
                     single_stock_notify=False,
                     report_type=ReportType.from_str(report_type),
-                    current_time=datetime.combine(target_date, datetime.min.time()),
+                    target_date=target_date,
                     backfill_mode=True,
                 )
                 if result is not None and getattr(result, "success", False):
