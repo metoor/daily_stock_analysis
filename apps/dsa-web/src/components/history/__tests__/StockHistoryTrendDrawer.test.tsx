@@ -209,6 +209,64 @@ describe('StockHistoryTrendDrawer', () => {
     expect(screen.getByText('回填')).toBeInTheDocument();
   });
 
+  it('displays targetDate instead of createdAt for backfilled records', () => {
+    render(
+      <StockHistoryTrendDrawer
+        report={report}
+        items={[
+          {
+            ...items[0],
+            backfilled: true,
+            targetDate: '2026-06-10',
+            createdAt: '2026-07-12T08:00:00Z',
+          },
+        ]}
+        total={1}
+        hasMore={false}
+        isLoading={false}
+        isLoadingMore={false}
+        filters={{ range: 'all', model: 'all', sort: 'desc' }}
+        onClose={vi.fn()}
+        onRangeChange={vi.fn()}
+        onLoadMore={vi.fn()}
+        onSelectRecord={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('2026-06-10')).toBeInTheDocument();
+    expect(screen.queryByText(/07\/12/)).not.toBeInTheDocument();
+    expect(screen.getByText('回填')).toBeInTheDocument();
+  });
+
+  it('falls back to createdAt when backfilled record has no targetDate', () => {
+    render(
+      <StockHistoryTrendDrawer
+        report={report}
+        items={[
+          {
+            ...items[0],
+            backfilled: true,
+            createdAt: '2026-03-20T08:00:00Z',
+          },
+        ]}
+        total={1}
+        hasMore={false}
+        isLoading={false}
+        isLoadingMore={false}
+        filters={{ range: 'all', model: 'all', sort: 'desc' }}
+        onClose={vi.fn()}
+        onRangeChange={vi.fn()}
+        onLoadMore={vi.fn()}
+        onSelectRecord={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('回填')).toBeInTheDocument();
+    expect(screen.queryByText('2026-06-10')).not.toBeInTheDocument();
+  });
+
   it('renders backfill button and triggers API on click', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(analysisApi.backfill).mockResolvedValue({ status: 'accepted', taskId: 't1', message: '' });

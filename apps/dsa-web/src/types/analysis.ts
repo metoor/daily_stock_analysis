@@ -439,6 +439,7 @@ export interface HistoryItem {
   modelUsed?: string;  // Display-only model snapshot from persisted history; runtime provider/model/base URL still come from analyzer configuration
   marketPhaseSummary?: MarketPhaseSummary | null;
   backfilled?: boolean;
+  targetDate?: string;
   createdAt: string;
 }
 

@@ -116,7 +116,10 @@ const summarizeView = (
           trendPrediction: report.summary.trendPrediction,
         }, actionLabels),
     averageScore,
-    latestTime: formatDateTime(items[0]?.createdAt || report.meta.createdAt),
+    latestTime:
+      items[0]?.backfilled && items[0]?.targetDate
+        ? items[0].targetDate
+        : formatDateTime(items[0]?.createdAt || report.meta.createdAt),
     modelSummary: modelEntries
       .map(([model, count]) => `${model} ${t('stockTrend.modelCountSuffix', { count })}`)
       .join(' / ') || t('stockTrend.neverRecorded'),
@@ -389,13 +392,19 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
                         }`}
                         onClick={() => setSelectedRecordId(item.id)}
                       >
-                        <td className="whitespace-nowrap px-3 py-3 font-mono text-sm text-secondary-text">
-                          {formatHistoryTime(item.createdAt)}
-                          {item.backfilled ? (
-                            <span className="ml-1 rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-secondary-text">
-                              {t('stockTrend.backfillBadge')}
+                        <td className="px-3 py-3 font-mono text-sm text-secondary-text">
+                          <div className="flex flex-col gap-1">
+                            <span className="whitespace-nowrap">
+                              {item.backfilled && item.targetDate
+                                ? item.targetDate
+                                : formatHistoryTime(item.createdAt)}
                             </span>
-                          ) : null}
+                            {item.backfilled ? (
+                              <span className="self-start rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-secondary-text">
+                                {t('stockTrend.backfillBadge')}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="whitespace-nowrap px-3 py-3">
                           <Badge

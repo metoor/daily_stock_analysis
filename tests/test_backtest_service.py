@@ -10,7 +10,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 import pandas as pd
@@ -219,6 +219,148 @@ class BacktestServiceTestCase(unittest.TestCase):
         stats3 = service.run_backtest(code="600519", force=True, eval_window_days=3, min_age_days=0, limit=10)
         self.assertEqual(stats3["saved"], 1)
         self.assertEqual(self._count_results(), 1)
+
+    def test_backfilled_record_with_recent_created_at_but_old_target_date_is_backtested(self) -> None:
+        """回填记录 created_at=今天、target_date=旧，应被回测选中并按 target_date 评估。"""
+        service = BacktestService(self.db)
+
+        # 回填记录：created_at=今天，target_date=2024-02-01（旧），snapshot 带 backfill 标记
+        backfill_target = date(2024, 2, 1)
+        with self.db.get_session() as session:
+            session.add(
+                AnalysisHistory(
+                    query_id="q-backfill",
+                    code="600519",
+                    name="贵州茅台",
+                    report_type="simple",
+                    sentiment_score=70,
+                    operation_advice="买入",
+                    trend_prediction="看多",
+                    analysis_summary="backfill-test",
+                    created_at=datetime.now(),
+                    context_snapshot=json.dumps(
+                        {
+                            "enhanced_context": {
+                                "date": backfill_target.isoformat(),
+                                "backfill": {
+                                    "target_date": backfill_target.isoformat(),
+                                    "data_scope": "price_only",
+                                    "created_at": datetime.now().isoformat(),
+                                },
+                            },
+                        }
+                    ),
+                )
+            )
+            # target_date 当日 close + 3 根 forward bar
+            session.add(
+                StockDaily(
+                    code="600519",
+                    date=backfill_target,
+                    open=100.0,
+                    high=101.0,
+                    low=99.0,
+                    close=100.0,
+                )
+            )
+            session.add_all(
+                [
+                    StockDaily(code="600519", date=date(2024, 2, 2), high=111.0, low=100.0, close=105.0),
+                    StockDaily(code="600519", date=date(2024, 2, 3), high=108.0, low=103.0, close=106.0),
+                    StockDaily(code="600519", date=date(2024, 2, 4), high=109.0, low=104.0, close=107.0),
+                ]
+            )
+            session.commit()
+
+        # 默认 min_age_days=14：回填记录 created_at=今天，但 target_date=2024-02-01（远早于 14 天前）
+        stats = service.run_backtest(
+            code="600519",
+            force=True,
+            eval_window_days=3,
+            min_age_days=14,
+            limit=10,
+        )
+        # 两条记录都应被处理：setUp 的 2024-01-01 正常记录 + 2024-02-01 回填记录
+        self.assertGreaterEqual(stats["saved"], 2)
+
+        # 验证回填记录的 BacktestResult 落库且 analysis_date = target_date
+        with self.db.get_session() as session:
+            backfill_result = (
+                session.query(BacktestResult)
+                .join(AnalysisHistory, AnalysisHistory.id == BacktestResult.analysis_history_id)
+                .filter(AnalysisHistory.query_id == "q-backfill")
+                .one_or_none()
+            )
+        self.assertIsNotNone(backfill_result, "回填记录应被回测处理")
+        self.assertEqual(backfill_result.analysis_date, backfill_target)
+        self.assertEqual(backfill_result.eval_status, "completed")
+
+    def test_backfilled_record_with_recent_target_date_is_filtered_by_min_age(self) -> None:
+        """回填记录 target_date 在 min_age 窗口内（<14 天），应被 Python 过滤挡掉。"""
+        service = BacktestService(self.db)
+
+        recent_target = date.today() - timedelta(days=3)
+        with self.db.get_session() as session:
+            session.add(
+                AnalysisHistory(
+                    query_id="q-backfill-recent",
+                    code="600519",
+                    name="贵州茅台",
+                    report_type="simple",
+                    sentiment_score=70,
+                    operation_advice="买入",
+                    trend_prediction="看多",
+                    analysis_summary="backfill-recent-test",
+                    created_at=datetime.now(),
+                    context_snapshot=json.dumps(
+                        {
+                            "enhanced_context": {
+                                "date": recent_target.isoformat(),
+                                "backfill": {
+                                    "target_date": recent_target.isoformat(),
+                                    "data_scope": "price_only",
+                                    "created_at": datetime.now().isoformat(),
+                                },
+                            },
+                        }
+                    ),
+                )
+            )
+            session.add(
+                StockDaily(
+                    code="600519",
+                    date=recent_target,
+                    open=100.0,
+                    high=101.0,
+                    low=99.0,
+                    close=100.0,
+                )
+            )
+            session.add_all(
+                [
+                    StockDaily(code="600519", date=date.today() - timedelta(days=2), high=111.0, low=100.0, close=105.0),
+                    StockDaily(code="600519", date=date.today() - timedelta(days=1), high=108.0, low=103.0, close=106.0),
+                ]
+            )
+            session.commit()
+
+        stats = service.run_backtest(
+            code="600519",
+            force=True,
+            eval_window_days=3,
+            min_age_days=14,
+            limit=10,
+        )
+
+        # 近期 target_date 的回填记录不应被处理，只处理 setUp 的旧记录
+        with self.db.get_session() as session:
+            recent_result = (
+                session.query(BacktestResult)
+                .join(AnalysisHistory, AnalysisHistory.id == BacktestResult.analysis_history_id)
+                .filter(AnalysisHistory.query_id == "q-backfill-recent")
+                .one_or_none()
+            )
+        self.assertIsNone(recent_result, "target_date 在 min_age 窗口内的回填记录不应被回测处理")
 
     def test_run_backtest_accepts_dotted_exchange_prefix_and_filters_analysis_date_range(self) -> None:
         service = BacktestService(self.db)
@@ -1687,6 +1829,47 @@ class BacktestServiceTestCase(unittest.TestCase):
         self.assertEqual(stats["insufficient"], 1)
         self.assertEqual(stats["diagnostics"]["empty_reason"], "insufficient_daily_data")
         self.assertIn("可用日线行情不足", stats["message"])
+
+    def test_run_backtest_insufficient_daily_data_message_lists_specifics(self) -> None:
+        """数据不足时，message 应包含 analysis_date/required_bars/available_bars，
+        让用户知道还要等多少交易日，而不是只看到"数据不足"。"""
+        with self.db.get_session() as session:
+            session.add(
+                AnalysisHistory(
+                    query_id="q-insufficient-specifics",
+                    code="000002",
+                    name="万科A",
+                    report_type="simple",
+                    sentiment_score=60,
+                    operation_advice="买入",
+                    trend_prediction="看多",
+                    analysis_summary="insufficient daily bars specifics",
+                    stop_loss=None,
+                    take_profit=None,
+                    created_at=datetime(2024, 1, 1, 0, 0, 0),
+                    context_snapshot='{"enhanced_context": {"date": "2024-01-01"}}',
+                )
+            )
+            session.add(
+                StockDaily(code="000002", date=date(2024, 1, 1), open=10.0, high=10.0, low=10.0, close=10.0)
+            )
+            session.commit()
+
+        service = BacktestService(self.db)
+        with patch.object(BacktestService, "_try_fill_daily_data", return_value=None):
+            stats = service.run_backtest(code="000002", force=False, eval_window_days=3, min_age_days=0, limit=10)
+
+        self.assertEqual(stats["diagnostics"]["empty_reason"], "insufficient_daily_data")
+        msg = stats["message"] or ""
+        self.assertIn("2024-01-01", msg)
+        self.assertIn("需要 3 个交易日", msg)
+        self.assertIn("目前 0 个", msg)
+
+        samples = stats["diagnostics"].get("insufficient_samples") or []
+        self.assertEqual(len(samples), 1)
+        self.assertEqual(samples[0]["analysis_date"], "2024-01-01")
+        self.assertEqual(samples[0]["required_bars"], 3)
+        self.assertEqual(samples[0]["available_bars"], 0)
 
     def _run_and_get_result(self) -> BacktestResult:
         """Helper: run backtest and return the single BacktestResult row."""

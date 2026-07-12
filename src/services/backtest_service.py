@@ -24,6 +24,24 @@ from src.services.stock_code_utils import normalize_code as normalize_backtest_c
 logger = logging.getLogger(__name__)
 
 
+def _format_insufficient_daily_data_message(
+    *,
+    eval_window_days: int,
+    samples: List[Dict[str, Any]],
+) -> str:
+    if not samples:
+        return "已找到历史分析记录，但可用日线行情不足，无法完成回测。"
+    sample = samples[0]
+    analysis_date = sample.get("analysis_date") or "?"
+    required = int(sample.get("required_bars") or eval_window_days)
+    available = int(sample.get("available_bars") or 0)
+    return (
+        f"已找到历史分析记录，但可用日线行情不足：分析日期 {analysis_date} 之后"
+        f"需要 {required} 个交易日，目前 {available} 个。"
+        f"请等到足够交易日后重试，或减小评估窗口。"
+    )
+
+
 class BacktestService:
     """Service layer to run and query backtests."""
 
@@ -86,6 +104,7 @@ class BacktestService:
         touched_codes: set[str] = set()
 
         results_to_save: List[BacktestResult] = []
+        insufficient_samples: List[Dict[str, Any]] = []
 
         for analysis in candidates:
             processed += 1
@@ -129,6 +148,14 @@ class BacktestService:
 
                 if start_daily is None or start_daily.close is None:
                     insufficient += 1
+                    if len(insufficient_samples) < 3:
+                        insufficient_samples.append(
+                            {
+                                "analysis_date": analysis_date.isoformat(),
+                                "required_bars": int(eval_window_days),
+                                "available_bars": 0,
+                            }
+                        )
                     results_to_save.append(
                         BacktestResult(
                             analysis_history_id=analysis.id,
@@ -185,6 +212,14 @@ class BacktestService:
                 status = evaluation.get("eval_status")
                 if status == "insufficient_data":
                     insufficient += 1
+                    if len(insufficient_samples) < 3:
+                        insufficient_samples.append(
+                            {
+                                "analysis_date": analysis_date.isoformat(),
+                                "required_bars": int(eval_window_days),
+                                "available_bars": len(forward_bars),
+                            }
+                        )
                 elif status == "completed":
                     completed += 1
                 else:
@@ -286,6 +321,7 @@ class BacktestService:
             errors=errors,
             has_matching_analysis=has_matching_analysis,
             aligned_existing_result_dates=aligned_existing_result_dates,
+            insufficient_samples=insufficient_samples,
         )
 
         return {
@@ -314,16 +350,7 @@ class BacktestService:
         if limit <= 0:
             return []
 
-        if analysis_date_from is None and analysis_date_to is None:
-            return self.repo.get_candidates(
-                code=code,
-                min_age_days=min_age_days,
-                limit=limit,
-                eval_window_days=eval_window_days,
-                engine_version=engine_version,
-                force=force,
-            )
-
+        has_date_filter = analysis_date_from is not None or analysis_date_to is not None
         matched: List[Any] = []
         offset = 0
         page_size = min(max(limit, 200), 1000)
@@ -341,15 +368,18 @@ class BacktestService:
             if not batch:
                 break
 
-            matched.extend(
-                self._filter_candidates_by_analysis_date(
+            fetched_count = len(batch)
+            batch = self._filter_candidates_by_min_age(batch, min_age_days=min_age_days)
+            if has_date_filter:
+                batch = self._filter_candidates_by_analysis_date(
                     batch,
                     analysis_date_from=analysis_date_from,
                     analysis_date_to=analysis_date_to,
                 )
-            )
-            offset += len(batch)
-            if len(batch) < page_size:
+
+            matched.extend(batch)
+            offset += fetched_count
+            if fetched_count < page_size:
                 break
 
         return matched[:limit]
@@ -365,18 +395,6 @@ class BacktestService:
         analysis_date_to: Optional[date],
     ) -> bool:
         """Check if historical analysis rows match the same run filters, ignoring backtest history."""
-        if analysis_date_from is None and analysis_date_to is None:
-            return bool(
-                self.repo.get_candidates(
-                    code=code,
-                    min_age_days=min_age_days,
-                    limit=1,
-                    eval_window_days=eval_window_days,
-                    engine_version=engine_version,
-                    force=True,
-                )
-            )
-
         return len(
             self._get_run_candidates(
                 code=code,
@@ -389,6 +407,34 @@ class BacktestService:
                 analysis_date_to=analysis_date_to,
             )
         ) > 0
+
+    def _filter_candidates_by_min_age(
+        self,
+        candidates: List[Any],
+        *,
+        min_age_days: int,
+    ) -> List[Any]:
+        """按 analysis_date（来自 enhanced_context.date）做 min_age 过滤。
+
+        回填记录的 created_at 是回填执行时刻，但 analysis_date 是 target_date。
+        用 _resolve_analysis_date 取到的 analysis_date 统一判断 min_age，
+        对回填记录（target_date 旧）和正常记录（analysis_date ≈ created_at.date）都正确。
+        """
+        if min_age_days <= 0:
+            return candidates
+        cutoff = date.today() - timedelta(days=min_age_days)
+        filtered: List[Any] = []
+        for analysis in candidates:
+            analysis_date = self._resolve_analysis_date(analysis)
+            if analysis_date is None:
+                # 无法从 snapshot 解析出日期，回退到 created_at
+                created = getattr(analysis, "created_at", None)
+                if created is not None and created.date() <= cutoff:
+                    filtered.append(analysis)
+                continue
+            if analysis_date <= cutoff:
+                filtered.append(analysis)
+        return filtered
 
     def _filter_candidates_by_analysis_date(
         self,
@@ -570,6 +616,7 @@ class BacktestService:
         errors: int,
         has_matching_analysis: bool = False,
         aligned_existing_result_dates: int = 0,
+        insufficient_samples: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         diagnostics: Dict[str, Any] = {
             "code": code,
@@ -582,6 +629,10 @@ class BacktestService:
         if aligned_existing_result_dates:
             diagnostics["aligned_existing_result_dates"] = aligned_existing_result_dates
 
+        samples = list(insufficient_samples or [])
+        if samples:
+            diagnostics["insufficient_samples"] = samples
+
         message: Optional[str] = None
         if processed == 0:
             if has_matching_analysis:
@@ -592,7 +643,10 @@ class BacktestService:
                 message = "未找到符合条件的历史分析记录，请检查股票代码、分析日期范围、最小天龄或是否已生成历史分析。"
         elif completed == 0 and insufficient > 0 and errors == 0:
             diagnostics["empty_reason"] = "insufficient_daily_data"
-            message = "已找到历史分析记录，但可用日线行情不足，无法完成回测。"
+            message = _format_insufficient_daily_data_message(
+                eval_window_days=eval_window_days,
+                samples=samples,
+            )
         elif completed == 0 and errors > 0:
             diagnostics["empty_reason"] = "evaluation_error"
             message = "已找到历史分析记录，但回测计算失败，请查看后端日志或放宽筛选条件。"
