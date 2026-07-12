@@ -37,6 +37,20 @@ export interface MarketReviewAccepted {
   taskId?: string;
 }
 
+export interface BackfillRequest {
+  stockCodes: string[];
+  targetDate: string;  // YYYY-MM-DD
+  force?: boolean;
+  reportType?: string;
+}
+
+export interface BackfillAccepted {
+  status: string;
+  message: string;
+  taskId?: string;
+  traceId?: string;
+}
+
 // ============ Report Types ============
 
 export type ReportLanguage = 'zh' | 'en' | 'ko';
@@ -424,6 +438,8 @@ export interface HistoryItem {
   turnoverRate?: number;
   modelUsed?: string;  // Display-only model snapshot from persisted history; runtime provider/model/base URL still come from analyzer configuration
   marketPhaseSummary?: MarketPhaseSummary | null;
+  backfilled?: boolean;
+  targetDate?: string;
   createdAt: string;
 }
 

@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 - [新功能] 飞书推送新增文件上传能力：`FeishuSender.send_feishu_file(file_path)` 通过 App Bot SDK (`im.v1.file.create`) 上传文件并发送文件消息；Webhook 模式回退为发送文件内容文本；新增 `FEISHU_SEND_AS_FILE=true` 配置开关，开启后飞书以文件形式发送报告而非文字消息。
 - [新功能] 多 Agent 编排 Pipeline 新增子 Agent 独立超时钳位：支持 6 个环境变量为 TechnicalAgent、IntelAgent、RiskAgent、DecisionAgent、PortfolioAgent、SkillAgent 各自配置独立硬上限，互不挤占配额；默认 0 表示关闭钳位。
+- [新功能] 历史趋势支持按指定日期补填分析记录（价格基准、标记为回填），补齐回测缺失日期
+- [修复] 按指定日期补填分析实际按当前时间生成（db.get_analysis_context 忽略 target_date、冻结日错位、backfill 标记取错日期、market_phase_context 报告日期错位）
 
 ## [3.25.0] - 2026-07-03
 

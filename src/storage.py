@@ -2785,7 +2785,53 @@ class DatabaseManager(metaclass=_DatabaseManagerMeta):
             context['ma_status'] = self._analyze_ma_status(today_data)
         
         return context
-    
+
+    def get_analysis_context_as_of(
+        self,
+        code: str,
+        target_date: date,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        按 target_date 精确取当日 + 前一交易日 bar，构造分析上下文。
+        供 backfill 模式专用，不替代 get_analysis_context。
+
+        - today_bar: 精确取 target_date 当日 bar（无 fallback）。
+        - yesterday_bar: target_date 之前最近一根 bar（< target_date）。
+        - 两者任一缺失 -> 返回 None。
+        """
+        bars = self.get_data_range(
+            code, target_date - timedelta(days=4), target_date
+        )
+        if not bars:
+            return None
+
+        today_bar = next((b for b in bars if b.date == target_date), None)
+        if today_bar is None:
+            return None
+
+        prior_bars = [b for b in bars if b.date < target_date]
+        if not prior_bars:
+            return None
+        yesterday_bar = prior_bars[-1]
+
+        context: Dict[str, Any] = {
+            "code": code,
+            "date": target_date.isoformat(),
+            "today": today_bar.to_dict(),
+            "yesterday": yesterday_bar.to_dict(),
+        }
+
+        if yesterday_bar.volume and yesterday_bar.volume > 0:
+            context["volume_change_ratio"] = round(
+                today_bar.volume / yesterday_bar.volume, 2
+            )
+        if yesterday_bar.close and yesterday_bar.close > 0:
+            context["price_change_ratio"] = round(
+                (today_bar.close - yesterday_bar.close) / yesterday_bar.close * 100, 2
+            )
+        context["ma_status"] = self._analyze_ma_status(today_bar)
+        return context
+
     def _analyze_ma_status(self, data: StockDaily) -> str:
         """
         分析均线形态

@@ -10,6 +10,7 @@
 3. 定义异步任务队列相关模型
 """
 
+from datetime import date
 from typing import Optional, List, Any, Literal
 from enum import Enum
 
@@ -137,6 +138,31 @@ class MarketReviewAccepted(BaseModel):
         None,
         description="任务 ID（仅当任务实际提交时返回）",
     )
+
+
+class BackfillRequest(BaseModel):
+    """按指定历史日期补填分析请求。"""
+
+    stock_codes: List[str] = Field(
+        ..., description="股票代码列表（可单可批）", json_schema_extra={"example": ["600519"]}
+    )
+    target_date: date = Field(
+        ..., description="目标历史日期 YYYY-MM-DD，须早于今天且为交易日",
+        json_schema_extra={"example": "2026-06-10"},
+    )
+    force: bool = Field(False, description="强制忽略查重并重新执行（可能与该日已有记录共存）")
+    report_type: str = Field(
+        "detailed", description="报告类型", pattern="^(simple|detailed|full|brief)$"
+    )
+
+
+class BackfillAccepted(BaseModel):
+    """按日期补填任务已接受。"""
+
+    status: str = Field("accepted", description="提交状态")
+    message: str = Field(..., description="提示信息")
+    task_id: Optional[str] = Field(None, description="后台任务 ID")
+    trace_id: Optional[str] = Field(None, description="诊断 trace ID")
 
 
 class AnalysisResultResponse(BaseModel):

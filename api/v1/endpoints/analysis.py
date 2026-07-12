@@ -23,6 +23,7 @@ import logging
 import re
 import uuid
 from datetime import datetime
+from datetime import date as _date
 from pathlib import Path
 from typing import Optional, Union, Dict, Any
 
@@ -44,6 +45,8 @@ from api.v1.schemas.analysis import (
     DuplicateTaskErrorResponse,
     MarketReviewRequest,
     MarketReviewAccepted,
+    BackfillRequest,
+    BackfillAccepted,
 )
 from api.v1.schemas.common import ErrorResponse
 from api.v1.schemas.history import (
@@ -572,6 +575,58 @@ def trigger_market_review(
         status="accepted",
         message="大盘复盘任务已提交，完成后会保存报告并按配置推送通知",
         send_notification=request.send_notification,
+        task_id=task.task_id,
+        trace_id=_get_task_trace_id(task),
+    )
+
+
+# ============================================================
+# POST /backfill - 按指定历史日期补填分析
+# ============================================================
+
+@router.post(
+    "/backfill",
+    response_model=BackfillAccepted,
+    status_code=202,
+    responses={
+        202: {"description": "补填任务已接受", "model": BackfillAccepted},
+        400: {"description": "请求参数错误", "model": ErrorResponse},
+    },
+    summary="按指定历史日期补填分析",
+    description=(
+        "以 target_date 为基准生成一条「价格基准、无新闻/基本面、标记为回填」的分析记录，"
+        "补齐回测缺失日期。force=true 时忽略查重并重新执行（可能与该日已有记录共存）。"
+        "异步执行，返回 task_id 供轮询。"
+    ),
+)
+def trigger_backfill(request: BackfillRequest) -> BackfillAccepted:
+    if not request.stock_codes:
+        raise api_error(400, "validation_error", "stock_codes 不能为空")
+    if request.target_date >= _date.today():
+        raise api_error(400, "validation_error", "target_date 必须早于今天（未收盘/未来日期不接受）")
+
+    stock_codes = request.stock_codes
+    target_date = request.target_date
+    force = request.force
+    report_type = request.report_type
+
+    def _run_backfill():
+        from src.services.analysis_service import AnalysisService
+        return AnalysisService().backfill_as_of_date(
+            stock_codes, target_date, force=force, report_type=report_type
+        )
+
+    task_id = uuid.uuid4().hex
+    task = get_task_queue().submit_background_task(
+        _run_backfill,
+        stock_code="backfill",
+        stock_name=f"补填 {target_date} 分析",
+        message=f"补填 {target_date} 分析任务已提交",
+        task_id=task_id,
+    )
+    return BackfillAccepted(
+        status="accepted",
+        message=f"补填 {target_date} 分析任务已提交，完成后记录会出现在历史趋势中",
         task_id=task.task_id,
         trace_id=_get_task_trace_id(task),
     )

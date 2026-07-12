@@ -13,8 +13,11 @@
 import logging
 import copy
 import uuid
+from datetime import date, datetime
 from typing import Optional, Dict, Any, Callable, List
 
+from data_provider.base import normalize_stock_code
+from src.core.trading_calendar import is_market_open, get_market_for_stock
 from src.repositories.analysis_repo import AnalysisRepository
 from src.report_language import (
     get_sentiment_label,
@@ -148,10 +151,97 @@ class AnalysisService:
             return None
         finally:
             reset_run_diagnostic_context(locals().get("diag_token"))
-    
+
+    def backfill_as_of_date(
+        self,
+        stock_codes: List[str],
+        target_date: date,
+        force: bool = False,
+        report_type: str = "detailed",
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Dict[str, Any]:
+        """
+        以 target_date 为基准补填分析（冻结价格、跳过新闻/基本面、标记为回填）。
+
+        - target_date 必须 < 今天且为该股交易日。
+        - 该股 target_date 已有真实记录则跳过（force 可覆盖）。
+        - 单股失败不中断，计入 errors。
+        """
+        from src.config import get_config
+        from src.core.pipeline import StockAnalysisPipeline
+        from src.enums import ReportType
+
+        today = datetime.now().date()
+        processed = saved = skipped = errors = 0
+        skip_reasons: list = []
+
+        if not stock_codes:
+            return {"processed": 0, "saved": 0, "skipped": 0, "errors": 0,
+                    "message": "stock_codes 不能为空", "diagnostics": {}}
+
+        if target_date >= today:
+            return {"processed": 0, "saved": 0, "skipped": 0,
+                    "errors": len(stock_codes),
+                    "message": "目标日期须早于今天（未收盘/未来日期不接受）",
+                    "diagnostics": {}}
+
+        for code in stock_codes:
+            market = get_market_for_stock(normalize_stock_code(code)) or "cn"
+            if not is_market_open(market, target_date):
+                errors += 1
+                skip_reasons.append(f"{code}: {target_date} 非该市场交易日（或日历不可用）")
+                continue
+            if not force and self.repo.find_real_analysis_for_date(code, target_date):
+                skipped += 1
+                skip_reasons.append(f"{code}: {target_date} 已有真实分析记录，已跳过（force 可覆盖）")
+                continue
+
+            processed += 1
+            try:
+                if progress_callback:
+                    progress_callback(20, f"{code}：正在以 {target_date} 为基准补填分析")
+                config = get_config()
+                pipeline = StockAnalysisPipeline(
+                    config=config,
+                    query_id=uuid.uuid4().hex,
+                    trace_id=uuid.uuid4().hex,
+                    query_source="backfill",
+                    progress_callback=progress_callback,
+                )
+                result = pipeline.process_single_stock(
+                    code=code,
+                    skip_analysis=False,
+                    single_stock_notify=False,
+                    report_type=ReportType.from_str(report_type),
+                    target_date=target_date,
+                    backfill_mode=True,
+                )
+                if result is not None and getattr(result, "success", False):
+                    saved += 1
+                else:
+                    errors += 1
+                    skip_reasons.append(f"{code}: 分析未成功（可能无 {target_date} 行情）")
+            except Exception as e:
+                errors += 1
+                logger.error(f"backfill {code}@{target_date} 失败: {e}", exc_info=True)
+                skip_reasons.append(f"{code}: {e}")
+
+        message = (
+            f"补填完成：处理 {processed}，保存 {saved}，跳过 {skipped}，错误 {errors}"
+            if processed else ("未处理任何记录；" + "；".join(skip_reasons[:3]))
+        )
+        return {
+            "processed": processed,
+            "saved": saved,
+            "skipped": skipped,
+            "errors": errors,
+            "message": message,
+            "diagnostics": {"reasons": skip_reasons},
+        }
+
     def _build_analysis_response(
-        self, 
-        result: Any, 
+        self,
+        result: Any,
         query_id: str,
         report_type: str = "detailed",
     ) -> Dict[str, Any]:

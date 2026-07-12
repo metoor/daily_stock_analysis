@@ -13,6 +13,7 @@ import { Badge, Button, Card } from '../common';
 import { DashboardStateBlock } from '../dashboard';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 import { useColorScheme } from '../../hooks/useColorScheme';
+import { analysisApi } from '../../api/analysis';
 import type { UiTextKey } from '../../i18n/uiText';
 
 interface StockHistoryTrendDrawerProps {
@@ -115,7 +116,10 @@ const summarizeView = (
           trendPrediction: report.summary.trendPrediction,
         }, actionLabels),
     averageScore,
-    latestTime: formatDateTime(items[0]?.createdAt || report.meta.createdAt),
+    latestTime:
+      items[0]?.backfilled && items[0]?.targetDate
+        ? items[0].targetDate
+        : formatDateTime(items[0]?.createdAt || report.meta.createdAt),
     modelSummary: modelEntries
       .map(([model, count]) => `${model} ${t('stockTrend.modelCountSuffix', { count })}`)
       .join(' / ') || t('stockTrend.neverRecorded'),
@@ -184,6 +188,44 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
   const { riseClass, fallClass } = useColorScheme();
   const currentRecordId = report.meta.id;
   const [selectedRecordId, setSelectedRecordId] = useState(currentRecordId);
+  const [backfillDate, setBackfillDate] = useState('');
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillNotice, setBackfillNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const handleBackfill = async () => {
+    if (!backfillDate || backfillBusy) return;
+    const stockCode = report.meta.stockCode;
+    if (!stockCode || !window.confirm(t('stockTrend.backfillConfirm', { date: backfillDate }))) return;
+    setBackfillBusy(true);
+    setBackfillNotice(null);
+    try {
+      const accepted = await analysisApi.backfill({ stockCodes: [stockCode], targetDate: backfillDate });
+      const taskId = accepted.taskId;
+      // 轮询任务状态，完成或失败后刷新历史
+      await new Promise<void>((resolve, reject) => {
+        const start = Date.now();
+        const tick = async () => {
+          try {
+            const status = await analysisApi.getStatus(taskId!);
+            if (status.status === 'completed') return resolve();
+            if (status.status === 'failed') return reject(new Error(status.error || 'failed'));
+            if (Date.now() - start > 5 * 60 * 1000) return reject(new Error('timeout'));
+          } catch (e) {
+            return reject(e);
+          }
+          window.setTimeout(tick, 2000);
+        };
+        tick();
+      });
+      setBackfillNotice({ kind: 'ok', text: t('stockTrend.backfillDone') });
+      onRetry();  // 复用现有历史刷新
+    } catch (e) {
+      setBackfillNotice({ kind: 'err', text: t('stockTrend.backfillFailed', { reason: String((e as Error).message || e) }) });
+    } finally {
+      setBackfillBusy(false);
+    }
+  };
+
   const actionLabels = useMemo(() => buildDecisionActionLabelMap(t), [t]);
   const summary = useMemo(
     () => summarizeView(items, report, t, actionLabels, currentRecordId),
@@ -284,8 +326,31 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
                     {t('stockTrend.loadMore')}
                   </Button>
                 ) : null}
+                <input
+                  type="date"
+                  aria-label={t('stockTrend.backfillDateLabel')}
+                  value={backfillDate}
+                  onChange={(e) => setBackfillDate(e.target.value)}
+                  className="rounded-lg border border-border/70 bg-background/50 px-2 py-1 text-xs text-foreground"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleBackfill}
+                  isLoading={backfillBusy}
+                  loadingText={t('stockTrend.backfillSubmitting')}
+                  disabled={!backfillDate}
+                >
+                  {t('stockTrend.backfillButton')}
+                </Button>
               </div>
             </div>
+
+            {backfillNotice ? (
+              <p className={`mt-3 text-xs ${backfillNotice.kind === 'ok' ? 'text-primary' : 'text-red-500'}`}>
+                {backfillNotice.text}
+              </p>
+            ) : null}
 
             <div className="mt-4 overflow-hidden rounded-xl border border-border/60 bg-card/30">
               <table className="w-full table-fixed text-left text-sm">
@@ -327,8 +392,19 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
                         }`}
                         onClick={() => setSelectedRecordId(item.id)}
                       >
-                        <td className="whitespace-nowrap px-3 py-3 font-mono text-sm text-secondary-text">
-                          {formatHistoryTime(item.createdAt)}
+                        <td className="px-3 py-3 font-mono text-sm text-secondary-text">
+                          <div className="flex flex-col gap-1">
+                            <span className="whitespace-nowrap">
+                              {item.backfilled && item.targetDate
+                                ? item.targetDate
+                                : formatHistoryTime(item.createdAt)}
+                            </span>
+                            {item.backfilled ? (
+                              <span className="self-start rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-secondary-text">
+                                {t('stockTrend.backfillBadge')}
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="whitespace-nowrap px-3 py-3">
                           <Badge

@@ -10,7 +10,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional, List, Dict, Any
 
 from src.storage import DatabaseManager, AnalysisHistory
@@ -114,11 +114,11 @@ class AnalysisRepository:
     def count_by_code(self, code: str, days: int = 30) -> int:
         """
         统计指定股票的分析记录数
-        
+
         Args:
             code: 股票代码
             days: 时间范围（天）
-            
+
         Returns:
             记录数量
         """
@@ -128,3 +128,36 @@ class AnalysisRepository:
         except Exception as e:
             logger.error(f"统计分析记录失败: {e}")
             return 0
+
+    def find_real_analysis_for_date(self, code: str, target_date: date) -> bool:
+        """
+        判断该股是否已存在「真实」（非回填）分析记录，其分析日期 == target_date。
+
+        分析日期取自 context_snapshot.enhanced_context.date（与回测同源）；
+        带 backfill 标记的记录视为回填记录，不计入。
+        """
+        from src.repositories.backtest_repo import BacktestRepository
+        from src.utils.data_processing import parse_json_field
+
+        # Window intentionally spans back to target_date because the real record was created around then;
+        # limit=500 + code-indexed query bounds the cost.
+        days = max(1, (date.today() - target_date).days + 3)
+        try:
+            records = self.db.get_analysis_history(code=code, days=days, limit=500)
+        except Exception as e:
+            logger.warning("find_real_analysis_for_date 查询失败 code=%s: %s", code, e)
+            return False
+
+        for record in records:
+            snapshot = parse_json_field(getattr(record, "context_snapshot", None))
+            if not isinstance(snapshot, dict):
+                continue
+            enhanced = snapshot.get("enhanced_context")
+            if not isinstance(enhanced, dict) or "backfill" in enhanced:
+                continue
+            record_date = BacktestRepository.parse_analysis_date_from_snapshot(
+                getattr(record, "context_snapshot", None)
+            )
+            if record_date == target_date:
+                return True
+        return False
