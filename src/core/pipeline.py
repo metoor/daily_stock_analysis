@@ -392,9 +392,14 @@ class StockAnalysisPipeline:
             if not isinstance(portfolio_context, dict):
                 portfolio_context = None
             market = get_market_for_stock(normalize_stock_code(code))
+            # backfill 模式下 current_time 为空，market_phase_context 会落到今天；
+            # 用 target_date 收盘后时间兜底，使 session_date/effective_daily_bar_date 落到 X 日
+            phase_current_time = current_time
+            if backfill_mode and target_date is not None and current_time is None:
+                phase_current_time = datetime.combine(target_date, datetime.max.time())
             market_phase_context = build_market_phase_context(
                 market=market,
-                current_time=current_time,
+                current_time=phase_current_time,
                 trigger_source=self.query_source,
                 analysis_phase=getattr(self, "analysis_phase", "auto"),
             )

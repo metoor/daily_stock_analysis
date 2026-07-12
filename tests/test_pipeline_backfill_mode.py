@@ -122,6 +122,10 @@ def test_backfill_uses_target_date_context():
     assert ec["backfill"]["target_date"] == "2026-06-10"
     assert ec["realtime"]["price"] == 10.4
     assert ec["realtime"]["change_pct"] == 1.9
+    # market_phase_context 的时间也应落到 target_date，避免报告显示今天
+    mpc = ec["market_phase_context"]
+    assert str(mpc["session_date"]) == "2026-06-10"
+    assert str(mpc["effective_daily_bar_date"]) == "2026-06-10"
     pipeline.search_service.search_comprehensive_intel.assert_not_called()
 
 
