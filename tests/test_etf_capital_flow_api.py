@@ -119,3 +119,26 @@ def test_get_range_returns_list(api_client):
     data = response.json()
     assert data["total"] == 3
     assert len(data["snapshots"]) == 3
+
+
+def test_refresh_triggers_service_and_returns_snapshot(api_client):
+    sample = _sample_payload("2026-07-17")
+    with patch(
+        "src.services.etf_capital_flow_service.EtfCapitalFlowService.run_daily",
+        return_value=sample,
+    ):
+        response = api_client.post("/api/v1/etf-capital-flow/refresh")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["trade_date"] == "2026-07-17"
+    assert data["status"] == "ok"
+    assert data["market_overview"]["total_net_inflow"] == 1000.0
+
+
+def test_refresh_returns_500_on_service_failure(api_client):
+    with patch(
+        "src.services.etf_capital_flow_service.EtfCapitalFlowService.run_daily",
+        side_effect=RuntimeError("boom"),
+    ):
+        response = api_client.post("/api/v1/etf-capital-flow/refresh")
+    assert response.status_code == 500

@@ -25,4 +25,11 @@ export const etfCapitalFlowApi = {
     );
     return toCamelCase<EtfCapitalFlowListResponse>(response.data);
   },
+
+  async refresh(): Promise<EtfCapitalFlowSnapshot> {
+    const response = await apiClient.post<Record<string, unknown>>(
+      '/api/v1/etf-capital-flow/refresh',
+    );
+    return toCamelCase<EtfCapitalFlowSnapshot>(response.data);
+  },
 };

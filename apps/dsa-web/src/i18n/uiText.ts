@@ -840,6 +840,8 @@ const zh = {
   'etfFlow.bucketDetail.col.discountPct': '折价%',
   'etfFlow.bucketDetail.col.netInflow': '净流入',
   'etfFlow.bucketDetail.col.shareChange': '份额变化',
+  'etfFlow.actions.refresh': '刷新',
+  'etfFlow.actions.refreshing': '刷新中...',
 } as const;
 
 export type UiTextKey = keyof typeof zh;
@@ -1684,6 +1686,8 @@ const en: Record<UiTextKey, string> = {
   'etfFlow.bucketDetail.col.discountPct': 'Discount %',
   'etfFlow.bucketDetail.col.netInflow': 'Net Inflow',
   'etfFlow.bucketDetail.col.shareChange': 'Share Change',
+  'etfFlow.actions.refresh': 'Refresh',
+  'etfFlow.actions.refreshing': 'Refreshing...',
 };
 
 export const UI_TEXT: Record<UiLanguage, Record<UiTextKey, string>> = {

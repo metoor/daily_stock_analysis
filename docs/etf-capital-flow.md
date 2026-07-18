@@ -49,6 +49,9 @@
 | `/api/v1/etf-capital-flow/latest` | GET | 获取最新快照 |
 | `/api/v1/etf-capital-flow/{trade_date}` | GET | 获取指定交易日 |
 | `/api/v1/etf-capital-flow/range/list?start_date=&end_date=` | GET | 范围查询 |
+| `/api/v1/etf-capital-flow/refresh` | POST | 手动触发刷新当日快照（覆盖当日 `trade_date` 行） |
+
+`POST /refresh` 同步调用 `EtfCapitalFlowService.run_daily()`，重新拉取 akshare `fund_etf_spot_em()` 当日数据并 upsert 当日快照。适用于：每日大盘复盘流程失败、当日数据缺失、需要 ad-hoc 刷新。响应为最新 `EtfCapitalFlowSnapshotResponse`；服务异常返回 500。
 
 ## Web 看板
 
@@ -77,3 +80,4 @@
 - 日频，无 intraday 实时
 - 国家队判定仅为"疑似"信号，不写死结论
 - 首日运行无历史快照，份额变动标 `missing`
+- 历史日期无法回填：akshare `fund_etf_spot_em()` 仅返回当日全市场快照，没有历史接口；`POST /refresh` 只能刷新（upsert）当日 `trade_date` 行，不能补过去缺失的交易日。若当日定时任务失败，应在同一交易日内尽快调用 `POST /refresh` 补齐；跨日则无法恢复

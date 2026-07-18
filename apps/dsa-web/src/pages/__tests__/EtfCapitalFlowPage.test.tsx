@@ -15,16 +15,18 @@ vi.mock('recharts', () => ({
   CartesianGrid: () => null,
 }));
 
-const { mockGetLatest, mockGetByDate, mockGetRange } = vi.hoisted(() => ({
+const { mockGetLatest, mockGetByDate, mockGetRange, mockRefresh } = vi.hoisted(() => ({
   mockGetLatest: vi.fn(),
   mockGetByDate: vi.fn(),
   mockGetRange: vi.fn(),
+  mockRefresh: vi.fn(),
 }));
 vi.mock('../../api/etfCapitalFlow', () => ({
   etfCapitalFlowApi: {
     getLatest: mockGetLatest,
     getByDate: mockGetByDate,
     getRange: mockGetRange,
+    refresh: mockRefresh,
   },
 }));
 
@@ -32,6 +34,7 @@ beforeEach(() => {
   mockGetLatest.mockReset();
   mockGetByDate.mockReset();
   mockGetRange.mockReset();
+  mockRefresh.mockReset();
   mockGetRange.mockResolvedValue({ snapshots: [], total: 0 });
   window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'zh');
 });
@@ -152,5 +155,31 @@ describe('EtfCapitalFlowPage', () => {
     // also appears in the KpiBar leading-sector slot, so match the title.
     await waitFor(() => expect(screen.getAllByText('券商').length).toBeGreaterThanOrEqual(1));
     expect(screen.getByText('成分明细')).toBeInTheDocument();
+  });
+
+  it('refresh button calls refresh API and renders refreshed snapshot', async () => {
+    mockGetLatest.mockResolvedValueOnce(sampleSnapshot);
+    const refreshedSnapshot = {
+      ...sampleSnapshot,
+      marketOverview: {
+        ...sampleSnapshot.marketOverview,
+        totalNetInflow: 50e8,
+      },
+    };
+    mockRefresh.mockResolvedValueOnce(refreshedSnapshot);
+    render(
+      <MemoryRouter>
+        <UiLanguageProvider>
+          <EtfCapitalFlowPage />
+        </UiLanguageProvider>
+      </MemoryRouter>,
+    );
+    // Wait for the initial snapshot to render.
+    await waitFor(() => expect(screen.getByText(/38\.0亿/)).toBeInTheDocument());
+    const refreshButton = screen.getByRole('button', { name: '刷新' });
+    fireEvent.click(refreshButton);
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalledTimes(1));
+    // The refreshed total (50e8) should now appear instead of the original (38e8).
+    await waitFor(() => expect(screen.getByText(/50\.0亿/)).toBeInTheDocument());
   });
 });

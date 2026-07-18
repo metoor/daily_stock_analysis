@@ -28,6 +28,7 @@ export function EtfCapitalFlowPage() {
   const [snapshot, setSnapshot] = useState<EtfCapitalFlowSnapshot | null>(null);
   const [rangeSnapshots, setRangeSnapshots] = useState<EtfCapitalFlowSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<ParsedApiError | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -90,6 +91,26 @@ export function EtfCapitalFlowPage() {
     setSelectedDate(value);
   }, []);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    setNotFound(false);
+    try {
+      const data = await etfCapitalFlowApi.refresh();
+      setSnapshot(data);
+      setSelectedDate('');
+    } catch (err) {
+      const status = (err as { response?: { status?: number } } | null | undefined)?.response?.status;
+      if (status === 404) {
+        setNotFound(true);
+      } else {
+        setError(getParsedApiError(err));
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   return (
     <AppPage>
       <PageHeader
@@ -97,25 +118,35 @@ export function EtfCapitalFlowPage() {
         title={t('etfFlow.title')}
         description={t('etfFlow.description')}
         actions={
-          <label className="flex items-center gap-2 text-sm text-secondary-text">
-            <span>{t('etfFlow.datePicker.label')}</span>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => handleDateChange(e.target.value)}
-              className="rounded border border-subtle bg-card px-2 py-1 text-foreground"
-              aria-label={t('etfFlow.datePicker.label')}
-            />
-            {selectedDate ? (
-              <button
-                type="button"
-                onClick={() => handleDateChange('')}
-                className="text-xs text-secondary-text underline hover:text-foreground"
-              >
-                {t('etfFlow.datePicker.latest')}
-              </button>
-            ) : null}
-          </label>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-secondary-text">
+              <span>{t('etfFlow.datePicker.label')}</span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="rounded border border-subtle bg-card px-2 py-1 text-foreground"
+                aria-label={t('etfFlow.datePicker.label')}
+              />
+              {selectedDate ? (
+                <button
+                  type="button"
+                  onClick={() => handleDateChange('')}
+                  className="text-xs text-secondary-text underline hover:text-foreground"
+                >
+                  {t('etfFlow.datePicker.latest')}
+                </button>
+              ) : null}
+            </label>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="rounded border border-subtle bg-card px-3 py-1 text-sm text-foreground hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {refreshing ? t('etfFlow.actions.refreshing') : t('etfFlow.actions.refresh')}
+            </button>
+          </div>
         }
       />
       {loading && <p>{t('common.loading')}...</p>}

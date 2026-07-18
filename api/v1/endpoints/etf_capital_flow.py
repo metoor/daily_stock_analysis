@@ -79,3 +79,31 @@ def get_by_date(trade_date: str):
     if result is None:
         raise _not_found(f"no ETF capital flow snapshot for trade_date={trade_date}")
     return EtfCapitalFlowSnapshotResponse(**result)
+
+
+@router.post(
+    "/refresh",
+    response_model=EtfCapitalFlowSnapshotResponse,
+    responses={500: {"model": ErrorResponse}},
+    summary="Manually refresh today's ETF capital flow snapshot",
+)
+def refresh():
+    """Regenerate today's snapshot on demand.
+
+    akshare ``fund_etf_spot_em`` only returns today's data, so historical
+    dates cannot be backfilled; this endpoint covers the case where the daily
+    market-review run failed or the user wants an ad-hoc refresh.
+    """
+    # Lazy import to avoid circular dependencies with src.services / data_provider.
+    from data_provider.base import DataFetcherManager
+    from src.services.etf_capital_flow_service import EtfCapitalFlowService
+
+    try:
+        manager = DataFetcherManager()
+        service = EtfCapitalFlowService(
+            fetcher=manager.get_etf_capital_flow_context
+        )
+        payload = service.run_daily()
+    except Exception as exc:
+        raise _internal_error("Refresh ETF snapshot failed", exc)
+    return EtfCapitalFlowSnapshotResponse(**payload)
