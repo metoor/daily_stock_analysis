@@ -943,8 +943,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         """Fetch ETF capital flow analysis. Fail-open: returns None on any error."""
         try:
             from src.services.etf_capital_flow_service import EtfCapitalFlowService
-            from data_provider.base import DataFetcherManager
-            service = EtfCapitalFlowService(fetcher=DataFetcherManager.get_instance().get_etf_capital_flow_context)
+            service = EtfCapitalFlowService(fetcher=self.data_manager.get_etf_capital_flow_context)
             return service.run_daily()
         except Exception as exc:
             logger.warning("ETF capital flow analysis failed; skipping injection: %s", exc)

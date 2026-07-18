@@ -5,15 +5,6 @@ from src.market_analyzer import MarketAnalyzer
 
 def test_inject_etf_block_after_capital_section():
     analyzer = MarketAnalyzer.__new__(MarketAnalyzer)
-    review = """### 一、市场综述
-大盘小幅上涨。
-
-### 四、资金与情绪
-北向资金小幅净流入。
-
-### 五、明日观察
-注意外围市场。
-"""
     etf_payload = {
         "trade_date": "2026-07-17",
         "status": "ok",
