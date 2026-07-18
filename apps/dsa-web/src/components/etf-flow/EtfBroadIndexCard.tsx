@@ -47,18 +47,18 @@ export const EtfBroadIndexCard: React.FC<EtfBroadIndexCardProps> = ({ indexBucke
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                 <div>
-                  <div className="text-secondary-text">净流入</div>
-                  <div className={`mt-0.5 font-medium ${bucket.netInflowSum >= 0 ? 'text-success' : 'text-danger'}`}>
+                  <div className="text-secondary-text">{t('etfFlow.broadIndex.netInflow')}</div>
+                  <div className={`mt-0.5 font-medium ${bucket.netInflowSum >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                     {formatYi(bucket.netInflowSum)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-secondary-text">折价率</div>
+                  <div className="text-secondary-text">{t('etfFlow.broadIndex.discount')}</div>
                   <div className="mt-0.5 font-medium text-foreground">{formatPct(discount)}</div>
                 </div>
                 <div>
-                  <div className="text-secondary-text">份额变化</div>
-                  <div className="mt-0.5 font-medium text-foreground">{shareChange === null ? '-' : `${shareChange >= 0 ? '+' : ''}${shareChange.toFixed(2)}`}</div>
+                  <div className="text-secondary-text">{t('etfFlow.broadIndex.shareChange')}</div>
+                  <div className={`mt-0.5 font-medium ${shareChange === null ? 'text-foreground' : shareChange >= 0 ? 'text-red-600' : 'text-green-600'}`}>{shareChange === null ? '-' : `${shareChange >= 0 ? '+' : ''}${shareChange.toFixed(2)}`}</div>
                 </div>
               </div>
             </Card>

@@ -57,12 +57,12 @@ export const EtfBucketDetail: React.FC<EtfBucketDetailProps> = ({ bucketName, de
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-secondary-text">
-                    <th className="px-2 py-1 text-left font-medium">代码</th>
-                    <th className="px-2 py-1 text-left font-medium">名称</th>
-                    <th className="px-2 py-1 text-right font-medium">涨跌%</th>
-                    <th className="px-2 py-1 text-right font-medium">折价%</th>
-                    <th className="px-2 py-1 text-right font-medium">净流入</th>
-                    <th className="px-2 py-1 text-right font-medium">份额变化</th>
+                    <th className="px-2 py-1 text-left font-medium">{t('etfFlow.bucketDetail.col.code')}</th>
+                    <th className="px-2 py-1 text-left font-medium">{t('etfFlow.bucketDetail.col.name')}</th>
+                    <th className="px-2 py-1 text-right font-medium">{t('etfFlow.bucketDetail.col.changePct')}</th>
+                    <th className="px-2 py-1 text-right font-medium">{t('etfFlow.bucketDetail.col.discountPct')}</th>
+                    <th className="px-2 py-1 text-right font-medium">{t('etfFlow.bucketDetail.col.netInflow')}</th>
+                    <th className="px-2 py-1 text-right font-medium">{t('etfFlow.bucketDetail.col.shareChange')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -70,14 +70,14 @@ export const EtfBucketDetail: React.FC<EtfBucketDetailProps> = ({ bucketName, de
                     <tr key={item.code} className="border-t border-subtle">
                       <td className="px-2 py-1 text-foreground">{item.code}</td>
                       <td className="px-2 py-1 text-foreground">{item.name ?? '-'}</td>
-                      <td className={`px-2 py-1 text-right ${(item.changePct ?? 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                      <td className={`px-2 py-1 text-right ${(item.changePct ?? 0) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {formatPct(item.changePct)}
                       </td>
                       <td className="px-2 py-1 text-right text-foreground">{formatPct(item.discountPct)}</td>
-                      <td className={`px-2 py-1 text-right ${(item.mainNetInflow ?? 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                      <td className={`px-2 py-1 text-right ${(item.mainNetInflow ?? 0) >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {formatYi(item.mainNetInflow)}
                       </td>
-                      <td className="px-2 py-1 text-right text-foreground">{formatShares(item.shareChange)}</td>
+                      <td className={`px-2 py-1 text-right ${(item.shareChange ?? 0) >= 0 ? 'text-red-600' : 'text-green-600'}`}>{formatShares(item.shareChange)}</td>
                     </tr>
                   ))}
                 </tbody>
