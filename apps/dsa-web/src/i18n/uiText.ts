@@ -808,6 +808,17 @@ const zh = {
   'settings.viewConfigItems': '查看配置项',
   'settings.envExportNote': '导出内容仅包含当前已保存配置，不包含页面上尚未保存的本地草稿。',
   'settings.envDockerNote': 'Docker 部署中，`--env-file` / Compose `env_file` 只会在启动时注入环境变量；此处导出/导入的是后端当前活跃的 `.env` 文件。若需要让 WebUI 保存值随容器重建保留，请将 `ENV_FILE` 指向 `/app/data/runtime.env` 等可写数据卷文件，并避免启动环境里继续保留同名旧值。',
+
+  // ETF capital flow dashboard (Task 11 placeholder values; Task 12 replaces with real translations)
+  'etfFlow.kpi.totalNetInflow': 'etfFlow.kpi.totalNetInflow',
+  'etfFlow.kpi.sectorCounts': 'etfFlow.kpi.sectorCounts',
+  'etfFlow.kpi.leader': 'etfFlow.kpi.leader',
+  'etfFlow.kpi.source': 'etfFlow.kpi.source',
+  'etfFlow.topFlow.inflowTitle': 'etfFlow.topFlow.inflowTitle',
+  'etfFlow.topFlow.outflowTitle': 'etfFlow.topFlow.outflowTitle',
+  'etfFlow.heatmap.title': 'etfFlow.heatmap.title',
+  'etfFlow.broadIndex.title': 'etfFlow.broadIndex.title',
+  'etfFlow.bucketDetail.title': 'etfFlow.bucketDetail.title',
 } as const;
 
 export type UiTextKey = keyof typeof zh;
@@ -1620,6 +1631,17 @@ const en: Record<UiTextKey, string> = {
   'settings.viewConfigItems': 'View fields',
   'settings.envExportNote': 'Exports include only currently saved configuration, not unsaved local drafts on the page.',
   'settings.envDockerNote': 'In Docker deployments, --env-file and Compose env_file inject environment variables only at startup. This export/import area uses the backend active .env file. To keep WebUI-saved values across container rebuilds, point ENV_FILE to a writable data-volume file such as /app/data/runtime.env and avoid keeping same-name old values in the startup environment.',
+
+  // ETF capital flow dashboard (Task 11 placeholder values; Task 12 replaces with real translations)
+  'etfFlow.kpi.totalNetInflow': 'etfFlow.kpi.totalNetInflow',
+  'etfFlow.kpi.sectorCounts': 'etfFlow.kpi.sectorCounts',
+  'etfFlow.kpi.leader': 'etfFlow.kpi.leader',
+  'etfFlow.kpi.source': 'etfFlow.kpi.source',
+  'etfFlow.topFlow.inflowTitle': 'etfFlow.topFlow.inflowTitle',
+  'etfFlow.topFlow.outflowTitle': 'etfFlow.topFlow.outflowTitle',
+  'etfFlow.heatmap.title': 'etfFlow.heatmap.title',
+  'etfFlow.broadIndex.title': 'etfFlow.broadIndex.title',
+  'etfFlow.bucketDetail.title': 'etfFlow.bucketDetail.title',
 };
 
 export const UI_TEXT: Record<UiLanguage, Record<UiTextKey, string>> = {
