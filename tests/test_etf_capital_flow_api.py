@@ -126,67 +126,13 @@ def test_refresh_triggers_service_and_returns_snapshot(api_client):
     with patch(
         "src.services.etf_capital_flow_service.EtfCapitalFlowService.run_daily",
         return_value=sample,
-    ) as mock_run:
+    ):
         response = api_client.post("/api/v1/etf-capital-flow/refresh")
     assert response.status_code == 200
     data = response.json()
     assert data["trade_date"] == "2026-07-17"
     assert data["status"] == "ok"
     assert data["market_overview"]["total_net_inflow"] == 1000.0
-    mock_run.assert_called_once()
-
-
-def test_refresh_with_empty_trade_date_calls_run_daily(api_client):
-    sample = _sample_payload("2026-07-17")
-    with patch(
-        "src.services.etf_capital_flow_service.EtfCapitalFlowService.run_daily",
-        return_value=sample,
-    ) as mock_run, patch(
-        "src.services.etf_capital_flow_service.EtfCapitalFlowService.backfill_for_date"
-    ) as mock_backfill:
-        response = api_client.post(
-            "/api/v1/etf-capital-flow/refresh", json={"trade_date": ""}
-        )
-    assert response.status_code == 200
-    mock_run.assert_called_once()
-    mock_backfill.assert_not_called()
-
-
-def test_refresh_with_past_date_calls_backfill(api_client):
-    past_date = "2026-07-15"
-    sample = _sample_payload(past_date)
-    sample["status"] = "partial"
-    with patch(
-        "src.services.etf_capital_flow_service.EtfCapitalFlowService.backfill_for_date",
-        return_value=sample,
-    ) as mock_backfill, patch(
-        "src.services.etf_capital_flow_service.EtfCapitalFlowService.run_daily"
-    ) as mock_run:
-        response = api_client.post(
-            "/api/v1/etf-capital-flow/refresh", json={"trade_date": past_date}
-        )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["trade_date"] == past_date
-    assert data["status"] == "partial"
-    mock_backfill.assert_called_once_with(past_date)
-    mock_run.assert_not_called()
-
-
-def test_refresh_with_future_date_returns_400(api_client):
-    response = api_client.post(
-        "/api/v1/etf-capital-flow/refresh", json={"trade_date": "2030-01-01"}
-    )
-    assert response.status_code == 400
-    assert response.json()["error"] == "bad_request"
-
-
-def test_refresh_with_invalid_date_format_returns_400(api_client):
-    response = api_client.post(
-        "/api/v1/etf-capital-flow/refresh", json={"trade_date": "not-a-date"}
-    )
-    assert response.status_code == 400
-    assert response.json()["error"] == "bad_request"
 
 
 def test_refresh_returns_500_on_service_failure(api_client):

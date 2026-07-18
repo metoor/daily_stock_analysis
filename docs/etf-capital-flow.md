@@ -49,32 +49,9 @@
 | `/api/v1/etf-capital-flow/latest` | GET | 获取最新快照 |
 | `/api/v1/etf-capital-flow/{trade_date}` | GET | 获取指定交易日 |
 | `/api/v1/etf-capital-flow/range/list?start_date=&end_date=` | GET | 范围查询 |
-| `/api/v1/etf-capital-flow/refresh` | POST | 手动触发刷新指定日期快照 |
+| `/api/v1/etf-capital-flow/refresh` | POST | 手动触发刷新当日快照（覆盖当日 `trade_date` 行） |
 
-`POST /refresh` 支持两种刷新路径，由请求体 `{"trade_date": "YYYY-MM-DD"}`（可选字段）控制：
-
-- **未传 `trade_date` / 空字符串 / 当天日期**：全量刷新。调用 `EtfCapitalFlowService.run_daily()`，重新拉取 akshare `fund_etf_spot_em()` 当日全市场快照（含主力净流入、折价率、最新份额等全部字段），upsert 当日 `trade_date` 行。适用于每日大盘复盘流程失败、当日数据缺失、ad-hoc 刷新当日数据。
-- **历史日期**：降级回填。调用 `EtfCapitalFlowService.backfill_for_date(trade_date)`，按当日 `fund_etf_spot_em()` 总市值选 Top 100 ETF，逐只调用 `ak.fund_etf_hist_em(symbol=code, start_date=end_date=trade_date)` 拉取该日 OHLCV，构建降级快照。
-- **未来日期**：HTTP 400。
-
-响应均为 `EtfCapitalFlowSnapshotResponse`；服务异常返回 500；非法 `trade_date` 格式或未来日期返回 400。
-
-### 历史日期回填的局限
-
-`fund_etf_spot_em()` 仅返回当日全市场快照，akshare 没有历史资金流接口。历史日期回填只能基于 `fund_etf_hist_em()` 的 OHLCV 数据，存在以下字段缺口：
-
-| 字段 | 当日全量刷新 | 历史日期回填 |
-|---|---|---|
-| `close` / `change_pct` / `turnover` / `volume` | ✅ | ✅（来自 OHLCV） |
-| `total_market_value` | ✅ | ✅（来自当日 spot 排名，仅用于 Top-N 与加权） |
-| `main_net_inflow` / `main_net_inflow_pct` | ✅ | `null` |
-| `discount_pct` | ✅ | `null` |
-| `latest_shares` / `share_change` | ✅ | `null` |
-| `iopv` | ✅ | `null` |
-
-历史回填快照 `status="partial"`，`warnings` 含 `"backfill: capital flow fields ... not available for historical dates"`。`market_overview.total_net_inflow` 为 `0.0`；`inflow_count` / `outflow_count` 改用 `change_pct` 符号统计（资金流数据不可用），并附 warning 说明。`market_overview.top_inflow` / `top_outflow` 为空（无法按 `main_net_inflow` 排序）。如果超过 50% 的 ETF 拉取失败，`status` 进一步降级为 `"failed"`。
-
-Web 看板在 `status === "partial"` 时会在顶部展示"历史日期回填数据"黄色提示横幅，说明资金流字段缺失。
+`POST /refresh` 同步调用 `EtfCapitalFlowService.run_daily()`，重新拉取 akshare `fund_etf_spot_em()` 当日数据并 upsert 当日快照。适用于：每日大盘复盘流程失败、当日数据缺失、需要 ad-hoc 刷新。响应为最新 `EtfCapitalFlowSnapshotResponse`；服务异常返回 500。
 
 ## Web 看板
 
@@ -103,4 +80,4 @@ Web 看板在 `status === "partial"` 时会在顶部展示"历史日期回填数
 - 日频，无 intraday 实时
 - 国家队判定仅为"疑似"信号，不写死结论
 - 首日运行无历史快照，份额变动标 `missing`
-- 历史日期回填仅覆盖 Top 100 总市值 ETF 的价量数据（OHLCV）；`fund_etf_spot_em()` 仅返回当日全市场快照，akshare 没有历史资金流接口，因此历史日期的 `main_net_inflow` / `discount_pct` / `latest_shares` / `iopv` 等字段不可用，`status` 标为 `"partial"`。若当日定时任务失败，应在同一交易日内尽快调用 `POST /refresh` 全量刷新当日 `trade_date`；跨日只能通过历史回填路径补齐价量字段。
+- 历史日期无法回填：akshare `fund_etf_spot_em()` 仅返回当日全市场快照，没有历史接口；`POST /refresh` 只能刷新（upsert）当日 `trade_date` 行，不能补过去缺失的交易日。若当日定时任务失败，应在同一交易日内尽快调用 `POST /refresh` 补齐；跨日则无法恢复

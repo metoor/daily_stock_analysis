@@ -4,7 +4,6 @@ import { PageHeader } from '../components/common/PageHeader';
 import { Card } from '../components/common/Card';
 import { ApiErrorAlert } from '../components/common/ApiErrorAlert';
 import { EmptyState } from '../components/common/EmptyState';
-import { InlineAlert } from '../components/common/InlineAlert';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import { getParsedApiError, type ParsedApiError } from '../api/error';
 import { etfCapitalFlowApi } from '../api/etfCapitalFlow';
@@ -97,14 +96,9 @@ export function EtfCapitalFlowPage() {
     setError(null);
     setNotFound(false);
     try {
-      // Pass the currently selected date so refresh regenerates that date's
-      // snapshot. Empty selectedDate = today (full refresh via run_daily);
-      // a past date = partial backfill via fund_etf_hist_em OHLCV.
-      const data = await etfCapitalFlowApi.refresh(selectedDate || undefined);
+      const data = await etfCapitalFlowApi.refresh();
       setSnapshot(data);
-      // Keep the date picker in sync with the returned snapshot's trade date
-      // so subsequent navigations / refreshes target the same date.
-      setSelectedDate(data.tradeDate ?? selectedDate);
+      setSelectedDate('');
     } catch (err) {
       const status = (err as { response?: { status?: number } } | null | undefined)?.response?.status;
       if (status === 404) {
@@ -115,7 +109,7 @@ export function EtfCapitalFlowPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [selectedDate]);
+  }, []);
 
   return (
     <AppPage>
@@ -165,13 +159,6 @@ export function EtfCapitalFlowPage() {
       )}
       {snapshot && (
         <div className="space-y-4">
-          {snapshot.status === 'partial' ? (
-            <InlineAlert
-              variant="warning"
-              title={t('etfFlow.partialWarning.title')}
-              message={t('etfFlow.partialWarning.description')}
-            />
-          ) : null}
           <EtfKpiBar snapshot={snapshot} />
           <Card title={t('etfFlow.sections.marketOverview')}>
             <EtfTopFlowChart

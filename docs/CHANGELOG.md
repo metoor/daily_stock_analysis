@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] 复用 `fund_etf_spot_em` 批量接口，单次拉取全市场 ETF 资金流数据
 - [改进] 持久化采用 SQLite JSON 快照，按交易日 upsert
 - [文档] 新增 `docs/etf-capital-flow.md` 用户文档
-- [新功能] ETF 资金流支持手动触发刷新指定日期快照：当日全量刷新，历史日期降级回填（仅价量数据，资金流字段缺失）
+- [新功能] ETF 资金流支持手动触发刷新当日快照（POST /api/v1/etf-capital-flow/refresh + Web 看板刷新按钮）
 
 ## [3.25.0] - 2026-07-03
 

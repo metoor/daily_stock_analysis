@@ -26,10 +26,9 @@ export const etfCapitalFlowApi = {
     return toCamelCase<EtfCapitalFlowListResponse>(response.data);
   },
 
-  async refresh(tradeDate?: string): Promise<EtfCapitalFlowSnapshot> {
+  async refresh(): Promise<EtfCapitalFlowSnapshot> {
     const response = await apiClient.post<Record<string, unknown>>(
       '/api/v1/etf-capital-flow/refresh',
-      tradeDate ? { trade_date: tradeDate } : {},
     );
     return toCamelCase<EtfCapitalFlowSnapshot>(response.data);
   },

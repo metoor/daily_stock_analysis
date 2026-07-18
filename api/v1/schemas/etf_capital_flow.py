@@ -70,18 +70,3 @@ class EtfCapitalFlowSnapshotResponse(BaseModel):
 class EtfCapitalFlowListResponse(BaseModel):
     snapshots: List[EtfCapitalFlowSnapshotResponse]
     total: int
-
-
-class EtfCapitalFlowRefreshRequest(BaseModel):
-    """Body for ``POST /api/v1/etf-capital-flow/refresh``.
-
-    ``trade_date`` semantics:
-    - Empty / None / today: full refresh via ``run_daily()`` (akshare
-      ``fund_etf_spot_em`` returns today's batch).
-    - Past date (``YYYY-MM-DD``): partial backfill via
-      ``backfill_for_date()`` using ``fund_etf_hist_em`` OHLCV; capital
-      flow fields are not available and will be null.
-    - Future date: rejected by the endpoint with HTTP 400.
-    """
-
-    trade_date: Optional[str] = None

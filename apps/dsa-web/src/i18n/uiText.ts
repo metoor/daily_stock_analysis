@@ -842,8 +842,6 @@ const zh = {
   'etfFlow.bucketDetail.col.shareChange': '份额变化',
   'etfFlow.actions.refresh': '刷新',
   'etfFlow.actions.refreshing': '刷新中...',
-  'etfFlow.partialWarning.title': '历史日期回填数据',
-  'etfFlow.partialWarning.description': '该快照由历史价量数据回填生成，主力净流入、折价率、最新份额等资金流字段不可用。',
 } as const;
 
 export type UiTextKey = keyof typeof zh;
@@ -1690,8 +1688,6 @@ const en: Record<UiTextKey, string> = {
   'etfFlow.bucketDetail.col.shareChange': 'Share Change',
   'etfFlow.actions.refresh': 'Refresh',
   'etfFlow.actions.refreshing': 'Refreshing...',
-  'etfFlow.partialWarning.title': 'Backfilled Historical Date',
-  'etfFlow.partialWarning.description': 'This snapshot was backfilled from historical OHLCV. Capital flow fields (main net inflow, discount rate, latest shares) are unavailable.',
 };
 
 export const UI_TEXT: Record<UiLanguage, Record<UiTextKey, string>> = {
