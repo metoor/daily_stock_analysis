@@ -213,7 +213,7 @@ class AnalysisService:
                     skip_analysis=False,
                     single_stock_notify=False,
                     report_type=ReportType.from_str(report_type),
-                    current_time=datetime.combine(target_date, datetime.min.time()),
+                    target_date=target_date,
                     backfill_mode=True,
                 )
                 if result is not None and getattr(result, "success", False):
@@ -331,7 +331,11 @@ class AnalysisService:
                 "risk_warning": result.risk_warning,
             }
         }
-        
+        if hasattr(result, "to_dict"):
+            raw_result_payload = result.to_dict()
+            if isinstance(raw_result_payload, dict):
+                report["details"]["raw_result"] = raw_result_payload
+
         return {
             "query_id": query_id,
             "trace_id": trace_id,

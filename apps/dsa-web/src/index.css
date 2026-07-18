@@ -2411,6 +2411,32 @@ textarea {
   color: var(--text-secondary-text);
 }
 
+/* Mobile adaptations for chat (max-width: 639px) */
+@media (max-width: 639px) {
+  .chat-prose {
+    font-size: 14px;
+  }
+  .chat-prose pre {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chat-prose table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .chat-bubble-user {
+    max-width: 85%;
+  }
+  .chat-bubble-ai {
+    max-width: 92%;
+  }
+  .chat-progress-item {
+    font-size: 13px;
+  }
+}
+
 /* Quick question button style */
 .quick-question-btn {
   padding: 0.375rem 0.75rem;

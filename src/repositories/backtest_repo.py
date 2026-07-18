@@ -55,7 +55,14 @@ class BacktestRepository:
         cutoff_dt = datetime.now() - timedelta(days=min_age_days)
 
         with self.db.get_session() as session:
-            conditions = [AnalysisHistory.created_at <= cutoff_dt]
+            # 回填记录的 created_at 是回填执行时刻（今天），但 analysis_date 是 target_date（可能很旧）。
+            # 用 context_snapshot LIKE '%"backfill"%' 放行回填记录，服务层再按 target_date 做 min_age 判断。
+            conditions = [
+                or_(
+                    AnalysisHistory.created_at <= cutoff_dt,
+                    AnalysisHistory.context_snapshot.like('%"backfill"%'),
+                )
+            ]
             if code:
                 conditions.extend(self._build_code_conditions(AnalysisHistory.code, code))
             conditions.append(

@@ -59,10 +59,12 @@ from src.services.daily_market_context import (
 )
 from src.services.social_sentiment_service import SocialSentimentService
 from src.services.intelligence_service import IntelligenceService
+from src.services.market_hotspot_service import MarketHotspotService
 from src.services.analysis_context_builder import (
     AnalysisContextBuilder,
     PipelineAnalysisArtifacts,
 )
+from src.services.market_structure_service import MarketStructureService
 from src.services.run_diagnostics import (
     activate_run_diagnostic_context,
     current_diagnostic_snapshot,
@@ -222,6 +224,14 @@ class StockAnalysisPipeline:
         self.trend_analyzer = StockTrendAnalyzer()  # 技术分析器
         self.analyzer = GeminiAnalyzer(config=self.config, skills=self.analysis_skills)
         self.notifier = NotificationService(source_message=source_message)
+        self.market_structure_service = MarketStructureService(fetcher_manager=self.fetcher_manager)
+        self.market_hotspot_service: Optional[MarketHotspotService] = None
+        try:
+            self.market_hotspot_service = MarketHotspotService(
+                fetcher_manager=self.fetcher_manager,
+            )
+        except Exception as exc:
+            logger.debug("market hotspot service init failed (fail-open): %s", exc)
         self._single_stock_notify_lock = threading.Lock()
         self._daily_market_context_service_lock = threading.Lock()
         self._concept_rankings_cache_lock = threading.Lock()
@@ -364,6 +374,7 @@ class StockAnalysisPipeline:
         query_id: str,
         current_time: Optional[datetime] = None,
         backfill_mode: bool = False,
+        target_date: Optional[date] = None,
     ) -> Optional[AnalysisResult]:
         """
         分析单只股票（增强版：含量比、换手率、筹码分析、多维度情报）
@@ -391,9 +402,14 @@ class StockAnalysisPipeline:
             if not isinstance(portfolio_context, dict):
                 portfolio_context = None
             market = get_market_for_stock(normalize_stock_code(code))
+            # backfill 模式下 current_time 为空，market_phase_context 会落到今天；
+            # 用 target_date 收盘后时间兜底，使 session_date/effective_daily_bar_date 落到 X 日
+            phase_current_time = current_time
+            if backfill_mode and target_date is not None and current_time is None:
+                phase_current_time = datetime.combine(target_date, datetime.max.time())
             market_phase_context = build_market_phase_context(
                 market=market,
-                current_time=current_time,
+                current_time=phase_current_time,
                 trigger_source=self.query_source,
                 analysis_phase=getattr(self, "analysis_phase", "auto"),
             )
@@ -499,6 +515,14 @@ class StockAnalysisPipeline:
                 code,
                 fundamental_context,
             )
+            market_structure_context = self._build_market_structure_context(
+                code=code,
+                stock_name=stock_name,
+                market=market,
+                fundamental_context=fundamental_context,
+                trade_date=daily_market_target_date,
+                market_phase_summary=market_phase_summary,
+            )
 
             # P0: write-only snapshot, fail-open, no read dependency on this table.
             try:
@@ -548,6 +572,7 @@ class StockAnalysisPipeline:
                     market_phase_summary=market_phase_summary,
                     daily_market_context=daily_market_context,
                     portfolio_context=portfolio_context,
+                    market_structure_context=market_structure_context,
                 )
 
             # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
@@ -619,9 +644,15 @@ class StockAnalysisPipeline:
 
             # Step 5: 获取分析上下文（技术面数据）
             self._emit_progress(58, f"{stock_name}：正在整理分析上下文")
-            context = self._get_analysis_context_with_market_fallback(code)
+            if backfill_mode and target_date is not None:
+                context = self.db.get_analysis_context_as_of(code, target_date)
+            else:
+                context = self._get_analysis_context_with_market_fallback(code)
 
             if context is None:
+                if backfill_mode and target_date is not None:
+                    logger.warning(f"[{code}] backfill: 无 {target_date} 行情数据，跳过")
+                    return None
                 logger.warning(f"{stock_name}({code}) 无法获取历史行情数据，将仅基于新闻和实时行情分析")
                 _mkt_date = get_market_now(
                     get_market_for_stock(normalize_stock_code(code))
@@ -655,9 +686,9 @@ class StockAnalysisPipeline:
             if portfolio_context is not None:
                 enhanced_context["portfolio_context"] = dict(portfolio_context)
 
-            if backfill_mode:
+            if backfill_mode and target_date is not None:
                 enhanced_context["backfill"] = {
-                    "target_date": context.get("date"),
+                    "target_date": target_date.isoformat(),
                     "data_scope": "price_only",
                     "created_at": datetime.now().isoformat(),
                 }
@@ -668,6 +699,8 @@ class StockAnalysisPipeline:
                         "change_pct": today_bar.get("pct_chg"),
                     }
 
+            if isinstance(market_structure_context, dict):
+                enhanced_context["market_structure_context"] = market_structure_context
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
             (
                 analysis_context_pack_summary,
@@ -787,6 +820,8 @@ class StockAnalysisPipeline:
                     )
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
+                if isinstance(market_structure_context, dict):
+                    result.market_structure_context = market_structure_context
                 result.market_phase_summary = market_phase_summary
                 result.analysis_context_pack_overview = analysis_context_pack_overview
                 self._refresh_decision_action_for_final_result(
@@ -1139,14 +1174,19 @@ class StockAnalysisPipeline:
 
         top_concepts, bottom_concepts = self._get_concept_rankings_for_market(market)
 
-        if top_concepts or bottom_concepts:
-            enriched_context["concept_boards"] = {
-                "status": "ok" if top_concepts and bottom_concepts else "partial",
-                "data": {
-                    "top": top_concepts,
-                    "bottom": bottom_concepts,
-                },
-            }
+        concept_data: Dict[str, Any] = {
+            "top": top_concepts,
+            "bottom": bottom_concepts,
+        }
+        if not top_concepts and not bottom_concepts:
+            # Empty lists are removed while fundamental contexts are merged.
+            # Keep a non-empty internal marker so downstream consumers can
+            # distinguish an attempted empty result from a missing preload.
+            concept_data["fetch_attempted"] = True
+        enriched_context["concept_boards"] = {
+            "status": "ok" if top_concepts and bottom_concepts else "partial",
+            "data": concept_data,
+        }
 
     def _get_concept_rankings_for_market(
         self,
@@ -1155,6 +1195,19 @@ class StockAnalysisPipeline:
         """Fetch market-wide concept rankings once per pipeline run."""
         if market != "cn":
             return [], []
+
+        service = getattr(self, "market_hotspot_service", None)
+        if service is None:
+            try:
+                service = MarketHotspotService(fetcher_manager=self.fetcher_manager)
+            except Exception as exc:
+                logger.debug(
+                    "market hotspot service init failed in concept ranking path (fail-open): %s",
+                    exc,
+                )
+                service = None
+            else:
+                self.market_hotspot_service = service
 
         cache = getattr(self, "_concept_rankings_cache", None)
         if not isinstance(cache, dict):
@@ -1174,20 +1227,60 @@ class StockAnalysisPipeline:
             top_concepts: List[Dict[str, Any]] = []
             bottom_concepts: List[Dict[str, Any]] = []
             try:
-                fetch_rankings = getattr(self.fetcher_manager, "get_concept_rankings", None)
-                if callable(fetch_rankings):
-                    rankings = fetch_rankings(5)
-                    if isinstance(rankings, tuple) and len(rankings) == 2:
-                        raw_top, raw_bottom = rankings
-                        if isinstance(raw_top, list):
-                            top_concepts = list(raw_top)
-                        if isinstance(raw_bottom, list):
-                            bottom_concepts = list(raw_bottom)
+                if service is None:
+                    fetch_rankings = getattr(self.fetcher_manager, "get_concept_rankings", None)
+                    if callable(fetch_rankings):
+                        rankings = fetch_rankings(5)
+                        if isinstance(rankings, tuple) and len(rankings) == 2:
+                            raw_top, raw_bottom = rankings
+                            if isinstance(raw_top, list):
+                                top_concepts = list(raw_top)
+                            if isinstance(raw_bottom, list):
+                                bottom_concepts = list(raw_bottom)
+                else:
+                    top_concepts, bottom_concepts = service.get_concept_rankings(5)
             except Exception as e:
                 logger.debug("attach concept_rankings failed (fail-open): %s", e)
 
             cache[market] = (top_concepts, bottom_concepts)
             return list(top_concepts), list(bottom_concepts)
+
+    def _build_market_structure_context(
+        self,
+        *,
+        code: str,
+        stock_name: str,
+        market: str,
+        fundamental_context: Optional[Dict[str, Any]],
+        trade_date: Any = None,
+        market_phase_summary: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Build market structure context without blocking the main analysis."""
+        service = getattr(self, "market_structure_service", None)
+        if service is None:
+            try:
+                service = MarketStructureService(fetcher_manager=self.fetcher_manager)
+                self.market_structure_service = service
+            except Exception as exc:
+                logger.debug("market structure service init failed (fail-open): %s", exc)
+                return None
+        try:
+            return service.build_context(
+                code=code,
+                stock_name=stock_name,
+                market=market,
+                fundamental_context=fundamental_context,
+                trade_date=trade_date,
+                market_phase_summary=market_phase_summary,
+            )
+        except Exception as exc:
+            logger.debug(
+                "%s market structure context build failed (fail-open): %s",
+                code,
+                exc,
+                exc_info=True,
+            )
+            return None
 
     def _ensure_agent_history(self, code: str, min_days: int = 240) -> None:
         """Ensure at least *min_days* of K-line history is in DB for agent tools."""
@@ -1224,6 +1317,7 @@ class StockAnalysisPipeline:
         market_phase_summary: Optional[Dict[str, Any]] = None,
         daily_market_context: Optional[DailyMarketContext] = None,
         portfolio_context: Optional[Dict[str, Any]] = None,
+        market_structure_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[AnalysisResult]:
         """
         使用 Agent 模式分析单只股票。
@@ -1254,6 +1348,8 @@ class StockAnalysisPipeline:
                 initial_context["skills"] = self.analysis_skills
             if market_phase_context is not None:
                 initial_context["market_phase_context"] = market_phase_context
+            if isinstance(market_structure_context, dict):
+                initial_context["market_structure_context"] = market_structure_context
             self._attach_daily_market_context(
                 initial_context,
                 daily_market_context,
@@ -1424,6 +1520,8 @@ class StockAnalysisPipeline:
                     )
                 if isinstance(fundamental_context, dict):
                     result.fundamental_context = fundamental_context
+                if isinstance(market_structure_context, dict):
+                    result.market_structure_context = market_structure_context
                 result.market_phase_summary = market_phase_summary
                 result.analysis_context_pack_overview = analysis_context_pack_overview
                 self._refresh_decision_action_for_final_result(
@@ -2358,6 +2456,9 @@ class StockAnalysisPipeline:
             "realtime_quote_raw": self._safe_to_dict(realtime_quote),
             "chip_distribution_raw": self._safe_to_dict(chip_data),
         }
+        market_structure_context = enhanced_context.get("market_structure_context")
+        if isinstance(market_structure_context, dict):
+            snapshot["market_structure_context"] = market_structure_context
         if news_content is not None:
             snapshot["news_retrieval_content"] = news_content
         if news_result_count is not None:
@@ -2774,6 +2875,7 @@ class StockAnalysisPipeline:
         analysis_query_id: Optional[str] = None,
         current_time: Optional[datetime] = None,
         backfill_mode: bool = False,
+        target_date: Optional[date] = None,
     ) -> Optional[AnalysisResult]:
         """
         处理单只股票的完整流程
@@ -2793,6 +2895,8 @@ class StockAnalysisPipeline:
             single_stock_notify: 是否启用单股推送模式（每分析完一只立即推送）
             report_type: 报告类型枚举（从配置读取，Issue #119）
             current_time: 本轮运行冻结的参考时间，用于统一断点续传目标交易日判断
+            backfill_mode: 回填模式，冻结日期由 target_date 直接接管
+            target_date: 回填目标日期（backfill_mode=True 时必填），直接冻结到该日
 
         Returns:
             AnalysisResult 或 None
@@ -2800,7 +2904,10 @@ class StockAnalysisPipeline:
         logger.info(f"========== 开始处理 {code} ==========")
 
         from src.services.history_loader import set_frozen_target_date, reset_frozen_target_date
-        frozen_td = self._resolve_resume_target_date(code, current_time=current_time)
+        if backfill_mode and target_date is not None:
+            frozen_td = target_date
+        else:
+            frozen_td = self._resolve_resume_target_date(code, current_time=current_time)
         token = set_frozen_target_date(frozen_td)
         effective_query_id = analysis_query_id or getattr(self, "query_id", None) or uuid.uuid4().hex
         effective_trace_id = getattr(self, "trace_id", None) or effective_query_id
@@ -2835,6 +2942,8 @@ class StockAnalysisPipeline:
                 analyze_kwargs["current_time"] = current_time
             if backfill_mode:
                 analyze_kwargs["backfill_mode"] = True
+                if target_date is not None:
+                    analyze_kwargs["target_date"] = target_date
             result = self.analyze_stock(code, report_type, **analyze_kwargs)
             
             if result and result.success:
