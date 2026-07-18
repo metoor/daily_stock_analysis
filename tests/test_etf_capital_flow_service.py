@@ -122,6 +122,24 @@ def test_run_daily_fail_open_when_fetcher_fails(isolated_db):
     assert result["index_buckets"] == []
 
 
+def test_run_daily_fail_open_when_fetcher_raises(isolated_db):
+    from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
+    repo = EtfCapitalFlowRepository(db_manager=isolated_db)
+
+    raising_fetcher = MagicMock(side_effect=RuntimeError("boom"))
+    service = EtfCapitalFlowService(fetcher=raising_fetcher, repository=repo)
+    result = service.run_daily()
+    assert result["status"] == "failed"
+    assert result["market_overview"]["top_inflow"] == []
+    assert result["market_overview"]["top_outflow"] == []
+    assert result["market_overview"]["inflow_count"] == 0
+    assert result["market_overview"]["outflow_count"] == 0
+    assert result["sector_buckets"] == []
+    assert result["index_buckets"] == []
+    assert result["details"] == []
+    assert any("boom" in w for w in result["warnings"])
+
+
 # Add this fixture at the bottom of the test file (mirror tests/test_decision_signal_repo.py):
 @pytest.fixture()
 def isolated_db(tmp_path):

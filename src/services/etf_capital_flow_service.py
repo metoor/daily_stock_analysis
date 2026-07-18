@@ -23,7 +23,6 @@ from src.data.etf_sector_mapping import classify_etf
 from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
 from src.services.etf_capital_flow_aggregator import (
     aggregate_bucket,
-    compute_consecutive_inflow_days,
     select_top_n_by_scale,
 )
 
