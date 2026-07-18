@@ -19,6 +19,7 @@ from api.v1.endpoints import (
     auth,
     backtest,
     decision_signals,
+    etf_capital_flow,
     health,
     history,
     intelligence,
@@ -108,6 +109,12 @@ router.include_router(
     intelligence.router,
     prefix="/intelligence",
     tags=["Intelligence"]
+)
+
+router.include_router(
+    etf_capital_flow.router,
+    prefix="/etf-capital-flow",
+    tags=["EtfCapitalFlow"]
 )
 
 router.include_router(
