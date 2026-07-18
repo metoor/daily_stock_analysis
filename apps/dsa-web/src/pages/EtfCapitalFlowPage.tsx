@@ -5,7 +5,7 @@ import { Card } from '../components/common/Card';
 import { ApiErrorAlert } from '../components/common/ApiErrorAlert';
 import { EmptyState } from '../components/common/EmptyState';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
-import { getParsedApiError, ParsedApiError } from '../api/error';
+import { getParsedApiError, type ParsedApiError } from '../api/error';
 import { etfCapitalFlowApi } from '../api/etfCapitalFlow';
 import type { EtfCapitalFlowSnapshot } from '../types/etfCapitalFlow';
 import { EtfKpiBar } from '../components/etf-flow/EtfKpiBar';
@@ -78,3 +78,5 @@ export function EtfCapitalFlowPage() {
     </AppPage>
   );
 }
+
+export default EtfCapitalFlowPage;
