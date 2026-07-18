@@ -833,6 +833,19 @@ class EfinanceFetcher(BaseFetcher):
             circuit_breaker.record_failure(source_key, str(e))
             return None
 
+    def get_etf_capital_flow_batch(self) -> Dict[str, Any]:
+        """Efinance does not expose an ETF spot batch with capital-flow fields.
+
+        Returns a failed block so DataFetcherManager can compose source_chain
+        consistently; the akshare primary path is the only viable source.
+        """
+        return {
+            "status": "failed",
+            "data": [],
+            "source_chain": [{"provider": "efinance", "result": "not_implemented", "duration_ms": 0}],
+            "errors": ["efinance does not expose ETF capital flow batch"],
+        }
+
     def get_main_indices(self, region: str = "cn") -> Optional[List[Dict[str, Any]]]:
         """
         获取主要指数实时行情 (efinance)，仅支持 A 股
