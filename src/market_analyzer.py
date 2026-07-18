@@ -726,7 +726,8 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                 len(review),
             )
             # Inject structured data tables into LLM prose sections
-            return self._inject_data_into_review(review, overview, news)
+            etf_payload = self._fetch_etf_capital_flow_payload()
+            return self._inject_data_into_review(review, overview, news, etf_payload=etf_payload)
 
         logger.warning(
             "[大盘] %s action=generate_review status=fallback_template reason=empty_llm_response",
@@ -890,12 +891,14 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         review: str,
         overview: MarketOverview,
         news: Optional[List] = None,
+        etf_payload: Optional[dict] = None,
     ) -> str:
         """Inject structured data tables into the corresponding LLM prose sections."""
         # Build data blocks
         stats_block = self._build_stats_block(overview)
         indices_block = self._build_indices_block(overview)
         sector_block = self._build_sector_block(overview)
+        etf_block = self._build_etf_capital_flow_block(etf_payload) if etf_payload else ""
         patterns = (
             _ENGLISH_SECTION_PATTERNS
             if self._get_review_language() == "en"
@@ -931,7 +934,21 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                 )
                 review = f"{review.rstrip()}\n\n{fallback_heading}\n{sector_block}\n"
 
+        if etf_block:
+            review = self._insert_after_section(review, patterns["funds_sentiment"], etf_block)
+
         return review
+
+    def _fetch_etf_capital_flow_payload(self) -> Optional[dict]:
+        """Fetch ETF capital flow analysis. Fail-open: returns None on any error."""
+        try:
+            from src.services.etf_capital_flow_service import EtfCapitalFlowService
+            from data_provider.base import DataFetcherManager
+            service = EtfCapitalFlowService(fetcher=DataFetcherManager.get_instance().get_etf_capital_flow_context)
+            return service.run_daily()
+        except Exception as exc:
+            logger.warning("ETF capital flow analysis failed; skipping injection: %s", exc)
+            return None
 
     @staticmethod
     def _insert_after_section(text: str, heading_pattern: str, block: str) -> str:
@@ -1150,6 +1167,60 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             append_ranking("#### 概念板块领涨 Top 5", "概念板块", overview.top_concepts)
             append_ranking("#### 概念板块领跌 Top 5", "概念板块", overview.bottom_concepts)
         return "\n".join(lines)
+
+    def _build_etf_capital_flow_block(self, etf_payload: dict) -> str:
+        """Build a compact markdown block summarizing ETF capital flow.
+
+        Returns empty string if no data available (fail-open: report proceeds without ETF section).
+        """
+        if not etf_payload or etf_payload.get("status") == "failed":
+            return ""
+        sector_buckets = etf_payload.get("sector_buckets") or []
+        index_buckets = etf_payload.get("index_buckets") or []
+        if not sector_buckets and not index_buckets:
+            return ""
+
+        lines = ["**资金方向（ETF）**", ""]
+
+        # Sector top 3 inflow / outflow
+        sorted_sectors = sorted(sector_buckets, key=lambda b: b.get("net_inflow_sum") or 0.0, reverse=True)
+        top_inflow = [b for b in sorted_sectors if (b.get("net_inflow_sum") or 0.0) > 0][:3]
+        top_outflow = [b for b in reversed(sorted_sectors) if (b.get("net_inflow_sum") or 0.0) < 0][:3]
+
+        if top_inflow:
+            parts = [f"{b['bucket_name']}(+{self._format_amount(b.get('net_inflow_sum') or 0.0)})" for b in top_inflow]
+            lines.append(f"- 净流入板块 Top{len(top_inflow)}：{'、'.join(parts)}")
+        if top_outflow:
+            parts = [f"{b['bucket_name']}({self._format_amount(b.get('net_inflow_sum') or 0.0)})" for b in top_outflow]
+            lines.append(f"- 净流出板块 Top{len(top_outflow)}：{'、'.join(parts)}")
+
+        # Broad-based index activity
+        if index_buckets:
+            index_parts = []
+            for b in index_buckets[:4]:
+                name = b.get("bucket_name") or ""
+                share_change = b.get("share_change_sum")
+                discount = b.get("weighted_discount_pct")
+                net_inflow = b.get("net_inflow_sum") or 0.0
+                part = f"{name}"
+                if share_change is not None:
+                    part += f" 份额{self._format_amount(share_change, sign=True)}"
+                if discount is not None:
+                    part += f" 折溢价{discount:+.2f}%"
+                part += f" 净流入{self._format_amount(net_inflow, sign=True)}"
+                index_parts.append(part)
+            if index_parts:
+                lines.append(f"- 宽基动向：{'; '.join(index_parts)}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_amount(value: float, *, sign: bool = False) -> str:
+        """Format an amount in 亿 unit. E.g., 1.23e8 -> '1.23亿'."""
+        amount_yi = value / 1e8
+        if sign:
+            return f"{amount_yi:+.1f}亿"
+        return f"{amount_yi:.1f}亿"
 
     def _build_news_block(self, news: List) -> str:
         """Build a compact source-aware news catalyst list for the rendered report."""
