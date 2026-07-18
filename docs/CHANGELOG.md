@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 - [新功能] 飞书推送新增文件上传能力：`FeishuSender.send_feishu_file(file_path)` 通过 App Bot SDK (`im.v1.file.create`) 上传文件并发送文件消息；Webhook 模式回退为发送文件内容文本；新增 `FEISHU_SEND_AS_FILE=true` 配置开关，开启后飞书以文件形式发送报告而非文字消息。
 - [新功能] 历史趋势支持按指定日期补填分析记录（价格基准、标记为回填），补齐回测缺失日期
+- [新功能] ETF 场内资金流分析：每日产出板块轮动 / 宽基动向 / 全市场总览三视角
+- [新功能] ETF 资金流 Web 看板：`/etf-flow` 页面，含热力图与下钻明细
+- [新功能] 大盘复盘报告注入"资金方向（ETF）"段
+- [改进] 复用 `fund_etf_spot_em` 批量接口，单次拉取全市场 ETF 资金流数据
+- [改进] 持久化采用 SQLite JSON 快照，按交易日 upsert
+- [文档] 新增 `docs/etf-capital-flow.md` 用户文档
 
 ## [3.25.0] - 2026-07-03
 
