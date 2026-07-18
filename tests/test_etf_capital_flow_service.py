@@ -1,7 +1,9 @@
 # tests/test_etf_capital_flow_service.py
 # -*- coding: utf-8 -*-
-from unittest.mock import MagicMock
+from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
 from src.services.etf_capital_flow_service import EtfCapitalFlowService
@@ -200,3 +202,193 @@ def isolated_db(tmp_path):
             os.environ.pop("DATABASE_PATH", None)
         else:
             os.environ["DATABASE_PATH"] = old_database_path
+
+
+# ---------------------------------------------------------------------------
+# backfill_for_date
+# ---------------------------------------------------------------------------
+
+
+def _backfill_universe_item(code, name, scale, turnover=100.0):
+    """Today's spot row used as the ranking universe for backfill."""
+    return {
+        "code": code,
+        "name": name,
+        "close": 1.0,
+        "iopv": None,
+        "discount_pct": 0.5,
+        "change_pct": 0.5,
+        "volume": 1000.0,
+        "turnover": turnover,
+        "main_net_inflow": 10.0,
+        "main_net_inflow_pct": 1.0,
+        "latest_shares": 1000,
+        "total_market_value": scale,
+        "circulating_market_value": scale,
+        "trade_date": datetime.now().strftime("%Y-%m-%d"),
+    }
+
+
+def _hist_frame(target_date: str, close=1.05, change_pct=0.5, turnover=1050.0, volume=1000):
+    """One-row akshare fund_etf_hist_em DataFrame for target_date."""
+    return pd.DataFrame(
+        [
+            {
+                "日期": target_date,
+                "开盘": close,
+                "收盘": close,
+                "最高": close * 1.01,
+                "最低": close * 0.99,
+                "成交量": volume,
+                "成交额": turnover,
+                "振幅": 2.0,
+                "涨跌幅": change_pct,
+                "涨跌额": close - 1.0,
+                "换手率": 1.0,
+            }
+        ]
+    )
+
+
+def _past_date(days_ago: int = 3) -> str:
+    return (datetime.now().date() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+
+
+def test_backfill_for_date_produces_partial_snapshot(isolated_db):
+    from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
+
+    repo = EtfCapitalFlowRepository(db_manager=isolated_db)
+    target_date = _past_date(3)
+
+    fetcher = MagicMock(return_value={
+        "status": "ok",
+        "data": [
+            _backfill_universe_item("512000", "券商ETF华泰", scale=500),
+            _backfill_universe_item("510300", "沪深300ETF华泰", scale=2000),
+        ],
+        "source_chain": [{"provider": "akshare", "result": "ok", "duration_ms": 100}],
+        "errors": [],
+    })
+
+    def _fake_hist_em(symbol, period, start_date, end_date, adjust):
+        return _hist_frame(target_date, close=1.05, change_pct=0.8)
+
+    service = EtfCapitalFlowService(fetcher=fetcher, repository=repo)
+    with patch("akshare.fund_etf_hist_em", side_effect=_fake_hist_em):
+        result = service.backfill_for_date(target_date)
+
+    assert result["trade_date"] == target_date
+    assert result["status"] == "partial"
+    assert any("backfill" in w for w in result["warnings"])
+    # Details: capital flow / share fields must be null for every row.
+    assert result["details"], "expected at least one detail row"
+    for detail in result["details"]:
+        assert detail["main_net_inflow"] is None
+        assert detail["discount_pct"] is None
+        assert detail["latest_shares"] is None
+        assert detail["share_change"] is None
+    # close / change_pct come from the hist row, not from today's spot.
+    for detail in result["details"]:
+        assert detail["close"] == 1.05
+        assert detail["change_pct"] == 0.8
+    # total_net_inflow is 0.0 because all main_net_inflow are None.
+    assert result["market_overview"]["total_net_inflow"] == 0.0
+    # inflow_count/outflow_count come from change_pct sign (both positive).
+    assert result["market_overview"]["inflow_count"] == len(result["details"])
+    assert result["market_overview"]["outflow_count"] == 0
+
+
+def test_backfill_for_date_persists_snapshot(isolated_db):
+    from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
+
+    repo = EtfCapitalFlowRepository(db_manager=isolated_db)
+    target_date = _past_date(5)
+
+    fetcher = MagicMock(return_value={
+        "status": "ok",
+        "data": [
+            _backfill_universe_item("512000", "券商ETF华泰", scale=500),
+        ],
+        "source_chain": [{"provider": "akshare", "result": "ok", "duration_ms": 100}],
+        "errors": [],
+    })
+
+    with patch("akshare.fund_etf_hist_em", side_effect=lambda **kw: _hist_frame(target_date)):
+        service = EtfCapitalFlowService(fetcher=fetcher, repository=repo)
+        service.backfill_for_date(target_date)
+
+    persisted = repo.get_snapshot(target_date)
+    assert persisted is not None
+    assert persisted["trade_date"] == target_date
+    assert persisted["status"] == "partial"
+
+
+def test_backfill_for_date_today_delegates_to_run_daily(isolated_db):
+    from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
+
+    repo = EtfCapitalFlowRepository(db_manager=isolated_db)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    fetcher = MagicMock(return_value={
+        "status": "ok",
+        "data": [],
+        "source_chain": [],
+        "errors": [],
+    })
+
+    service = EtfCapitalFlowService(fetcher=fetcher, repository=repo)
+    delegated = {
+        "trade_date": today,
+        "status": "ok",
+        "source_chain": [],
+        "warnings": [],
+        "market_overview": {
+            "total_net_inflow": 1.0,
+            "inflow_count": 1,
+            "outflow_count": 0,
+            "top_inflow": [],
+            "top_outflow": [],
+        },
+        "sector_buckets": [],
+        "index_buckets": [],
+        "details": [],
+    }
+    with patch.object(service, "run_daily", return_value=delegated) as mock_run:
+        result = service.backfill_for_date(today)
+
+    mock_run.assert_called_once()
+    assert result["trade_date"] == today
+    assert result["status"] == "ok"
+
+
+def test_backfill_for_date_marks_failed_when_majority_fetches_fail(isolated_db):
+    """If >50% of per-ETF hist fetches raise, status must be 'failed'."""
+    from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
+
+    repo = EtfCapitalFlowRepository(db_manager=isolated_db)
+    target_date = _past_date(2)
+
+    fetcher = MagicMock(return_value={
+        "status": "ok",
+        "data": [
+            _backfill_universe_item("512000", "券商ETF华泰", scale=500),
+            _backfill_universe_item("510300", "沪深300ETF华泰", scale=2000),
+            _backfill_universe_item("510500", "中证500ETF", scale=1500),
+        ],
+        "source_chain": [{"provider": "akshare", "result": "ok", "duration_ms": 100}],
+        "errors": [],
+    })
+
+    def _flaky_hist_em(symbol, **kwargs):
+        # Only one of three ETFs returns data; >50% fail -> status='failed'.
+        if symbol == "510300":
+            return _hist_frame(target_date)
+        raise RuntimeError("akshare boom")
+
+    with patch("akshare.fund_etf_hist_em", side_effect=_flaky_hist_em):
+        service = EtfCapitalFlowService(fetcher=fetcher, repository=repo)
+        result = service.backfill_for_date(target_date)
+
+    assert result["trade_date"] == target_date
+    assert result["status"] == "failed"
+    assert any("510500" in w or "512000" in w for w in result["warnings"])

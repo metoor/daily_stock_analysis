@@ -179,7 +179,56 @@ describe('EtfCapitalFlowPage', () => {
     const refreshButton = screen.getByRole('button', { name: '刷新' });
     fireEvent.click(refreshButton);
     await waitFor(() => expect(mockRefresh).toHaveBeenCalledTimes(1));
+    // When no date is selected, refresh should be called with undefined.
+    expect(mockRefresh).toHaveBeenCalledWith(undefined);
     // The refreshed total (50e8) should now appear instead of the original (38e8).
     await waitFor(() => expect(screen.getByText(/50\.0亿/)).toBeInTheDocument());
+  });
+
+  it('refresh button passes the selected date to the refresh API', async () => {
+    mockGetLatest.mockResolvedValueOnce(sampleSnapshot);
+    const backfilledSnapshot = {
+      ...sampleSnapshot,
+      tradeDate: '2026-07-10',
+      status: 'partial',
+      marketOverview: {
+        ...sampleSnapshot.marketOverview,
+        totalNetInflow: 0,
+      },
+    };
+    mockGetByDate.mockResolvedValueOnce(backfilledSnapshot);
+    mockRefresh.mockResolvedValueOnce(backfilledSnapshot);
+    const { container } = render(
+      <MemoryRouter>
+        <UiLanguageProvider>
+          <EtfCapitalFlowPage />
+        </UiLanguageProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText(/38\.0亿/)).toBeInTheDocument());
+    const dateInput = container.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: '2026-07-10' } });
+    await waitFor(() => expect(mockGetByDate).toHaveBeenCalledWith('2026-07-10'));
+    const refreshButton = screen.getByRole('button', { name: '刷新' });
+    fireEvent.click(refreshButton);
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalledWith('2026-07-10'));
+  });
+
+  it('shows partial-data warning banner when snapshot status is "partial"', async () => {
+    const partialSnapshot = {
+      ...sampleSnapshot,
+      status: 'partial',
+    };
+    mockGetLatest.mockResolvedValueOnce(partialSnapshot);
+    render(
+      <MemoryRouter>
+        <UiLanguageProvider>
+          <EtfCapitalFlowPage />
+        </UiLanguageProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/历史日期回填数据|Backfilled Historical Date/)).toBeInTheDocument(),
+    );
   });
 });

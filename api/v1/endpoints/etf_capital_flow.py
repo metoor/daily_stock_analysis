@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -11,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 from api.v1.schemas.common import ErrorResponse
 from api.v1.schemas.etf_capital_flow import (
     EtfCapitalFlowListResponse,
+    EtfCapitalFlowRefreshRequest,
     EtfCapitalFlowSnapshotResponse,
 )
 from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
@@ -21,6 +23,13 @@ router = APIRouter()
 
 def _not_found(message: str) -> HTTPException:
     return HTTPException(status_code=404, detail={"error": "not_found", "message": message})
+
+
+def _bad_request(message: str) -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail={"error": "bad_request", "message": message},
+    )
 
 
 def _internal_error(message: str, exc: Exception) -> HTTPException:
@@ -84,26 +93,57 @@ def get_by_date(trade_date: str):
 @router.post(
     "/refresh",
     response_model=EtfCapitalFlowSnapshotResponse,
-    responses={500: {"model": ErrorResponse}},
-    summary="Manually refresh today's ETF capital flow snapshot",
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Manually refresh an ETF capital flow snapshot (today or a past trade date)",
 )
-def refresh():
-    """Regenerate today's snapshot on demand.
+def refresh(body: Optional[EtfCapitalFlowRefreshRequest] = None):
+    """Regenerate a snapshot on demand.
 
-    akshare ``fund_etf_spot_em`` only returns today's data, so historical
-    dates cannot be backfilled; this endpoint covers the case where the daily
-    market-review run failed or the user wants an ad-hoc refresh.
+    - No body / empty ``trade_date`` / ``trade_date`` == today: full refresh
+      via ``EtfCapitalFlowService.run_daily()`` (akshare ``fund_etf_spot_em``
+      returns today's batch with all capital-flow fields).
+    - ``trade_date`` is a past date (``YYYY-MM-DD``): partial backfill via
+      ``EtfCapitalFlowService.backfill_for_date()`` using
+      ``fund_etf_hist_em`` OHLCV. Capital-flow fields (``main_net_inflow``,
+      ``discount_pct``, ``latest_shares``, ``iopv``) are unavailable for
+      historical dates and will be null; ``status`` will be ``"partial"``.
+    - ``trade_date`` is in the future: HTTP 400.
+    - ``trade_date`` is not a valid ``YYYY-MM-DD`` date: HTTP 400.
     """
     # Lazy import to avoid circular dependencies with src.services / data_provider.
     from data_provider.base import DataFetcherManager
     from src.services.etf_capital_flow_service import EtfCapitalFlowService
+
+    trade_date_raw = (body.trade_date or "").strip() if body else ""
+
+    if trade_date_raw:
+        try:
+            trade_dt = datetime.strptime(trade_date_raw, "%Y-%m-%d").date()
+        except ValueError:
+            raise _bad_request(
+                f"invalid trade_date={trade_date_raw!r}, expected YYYY-MM-DD"
+            )
+        today_dt = datetime.now().date()
+        if trade_dt > today_dt:
+            raise _bad_request(
+                f"trade_date={trade_date_raw} is in the future; "
+                "only today or past dates can be refreshed"
+            )
+        is_past = trade_dt < today_dt
+    else:
+        is_past = False
 
     try:
         manager = DataFetcherManager()
         service = EtfCapitalFlowService(
             fetcher=manager.get_etf_capital_flow_context
         )
-        payload = service.run_daily()
+        if is_past:
+            payload = service.backfill_for_date(trade_date_raw)
+        else:
+            payload = service.run_daily()
+    except HTTPException:
+        raise
     except Exception as exc:
         raise _internal_error("Refresh ETF snapshot failed", exc)
     return EtfCapitalFlowSnapshotResponse(**payload)
