@@ -130,11 +130,15 @@ class EtfCapitalFlowService:
                 details.append(self._detail_item(member, bucket_type, bucket_name))
 
         # 5. C view: all-market ranking
+        # Filter by sign before slicing so top_inflow (positive) and top_outflow
+        # (negative) never overlap when the universe has fewer than 10 items.
         sorted_by_inflow = sorted(items, key=lambda x: x.get("main_net_inflow") or 0.0, reverse=True)
-        top_inflow = [self._ranking_item(m) for m in sorted_by_inflow[:10]]
-        top_outflow = [self._ranking_item(m) for m in sorted_by_inflow[-10:][::-1]]
-        inflow_count = sum(1 for m in items if (m.get("main_net_inflow") or 0.0) > 0)
-        outflow_count = sum(1 for m in items if (m.get("main_net_inflow") or 0.0) < 0)
+        inflow_items = [m for m in sorted_by_inflow if (m.get("main_net_inflow") or 0.0) > 0]
+        outflow_items = [m for m in sorted_by_inflow if (m.get("main_net_inflow") or 0.0) < 0]
+        top_inflow = [self._ranking_item(m) for m in inflow_items[:10]]
+        top_outflow = [self._ranking_item(m) for m in outflow_items[-10:][::-1]]
+        inflow_count = len(inflow_items)
+        outflow_count = len(outflow_items)
         total_net_inflow = sum(m.get("main_net_inflow") or 0.0 for m in items)
 
         # Sort buckets by net_inflow_sum desc

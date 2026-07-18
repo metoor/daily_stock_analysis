@@ -1387,7 +1387,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if review_language == "en":
             if self.profile.has_market_stats and self.profile.has_sector_rankings:
                 return """### 3. Fund Flows
-(Interpret what turnover, participation, and flow signals imply.)
+(Interpret what turnover, participation, and flow signals imply. ETF capital flow data is attached as a structured block; please incorporate ETF sector rotation and broad-index share changes into your funds & sentiment analysis.)
 
 ### 4. Sector Highlights
 (Distinguish industry-sector moves from concept/theme moves, then analyze drivers and persistence.)
@@ -1405,7 +1405,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             sections: List[str] = []
             if self.profile.has_market_stats:
                 sections.append(f"""### {section_number}. Fund Flows
-(Interpret only the provided turnover, participation, breadth, and flow signals.)""")
+(Interpret only the provided turnover, participation, breadth, and flow signals. ETF capital flow data is attached as a structured block; please incorporate ETF sector rotation and broad-index share changes into your funds & sentiment analysis.)""")
                 section_number += 1
             if self.profile.has_sector_rankings:
                 sections.append(f"""### {section_number}. Sector Highlights
@@ -1428,7 +1428,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 （区分行业板块与概念题材，分析领涨/领跌背后的逻辑、持续性和是否形成主线）
 
 ### 四、资金与情绪
-（解读成交额、涨跌停结构、市场宽度和风险偏好）
+（解读成交额、涨跌停结构、市场宽度和风险偏好；ETF 资金方向数据已附在结构化 block 中，请结合 ETF 板块轮动与宽基份额变动解读资金面）
 
 ### 五、消息催化
 （结合近三日新闻，提炼真正影响明日交易的催化或扰动）
@@ -1451,7 +1451,10 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if self.profile.has_sector_rankings:
             add_section("板块主线", "（仅分析已提供的行业板块与概念题材榜单，不扩展未提供的数据）")
         if self.profile.has_market_stats:
-            add_section("资金与情绪", "（仅解读已提供的成交额、涨跌停结构、市场宽度和风险偏好数据）")
+            add_section(
+                "资金与情绪",
+                "（仅解读已提供的成交额、涨跌停结构、市场宽度和风险偏好数据；ETF 资金方向数据已附在结构化 block 中，请结合 ETF 板块轮动与宽基份额变动解读资金面）",
+            )
         add_section(
             "消息催化",
             "（结合近三日新闻和指数表现，提炼真正影响明日交易的催化或扰动；不要推断未提供的资金流、市场宽度或板块榜）",

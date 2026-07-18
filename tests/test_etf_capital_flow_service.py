@@ -140,6 +140,45 @@ def test_run_daily_fail_open_when_fetcher_raises(isolated_db):
     assert any("boom" in w for w in result["warnings"])
 
 
+def test_run_daily_top_inflow_outflow_no_overlap_with_few_items(isolated_db):
+    """Regression: with <10 items, top_inflow and top_outflow must not share codes.
+
+    Previously both lists sliced the same sorted array (first 10 vs last 10
+    reversed), so a 5-item universe appeared in both charts. The fix filters
+    by sign of main_net_inflow before slicing.
+    """
+    from src.repositories.etf_capital_flow_repo import EtfCapitalFlowRepository
+    repo = EtfCapitalFlowRepository(db_manager=isolated_db)
+
+    fetcher = MagicMock(return_value={
+        "status": "ok",
+        "data": [
+            # 3 inflow ETFs (positive main_net_inflow)
+            _batch_item("512000", "券商ETF华泰", scale=500, inflow=10, change=1.0, discount=0.5, shares=1000),
+            _batch_item("512880", "证券ETF指数", scale=300, inflow=5, change=0.5, discount=0.3, shares=800),
+            _batch_item("510300", "沪深300ETF华泰", scale=2000, inflow=50, change=0.8, discount=-0.1, shares=5000),
+            # 2 outflow ETFs (negative main_net_inflow)
+            _batch_item("159915", "芯片ETF", scale=400, inflow=-8, change=-1.2, discount=0.2, shares=600),
+            _batch_item("588000", "科创50ETF", scale=350, inflow=-3, change=-0.4, discount=0.1, shares=700),
+        ],
+        "source_chain": [{"provider": "akshare", "result": "ok", "duration_ms": 100}],
+        "errors": [],
+    })
+
+    service = EtfCapitalFlowService(fetcher=fetcher, repository=repo)
+    result = service.run_daily()
+
+    top_inflow = result["market_overview"]["top_inflow"]
+    top_outflow = result["market_overview"]["top_outflow"]
+    assert len(top_inflow) == 3
+    assert len(top_outflow) == 2
+    inflow_codes = {item["code"] for item in top_inflow}
+    outflow_codes = {item["code"] for item in top_outflow}
+    assert inflow_codes.isdisjoint(outflow_codes)
+    assert result["market_overview"]["inflow_count"] == 3
+    assert result["market_overview"]["outflow_count"] == 2
+
+
 # Add this fixture at the bottom of the test file (mirror tests/test_decision_signal_repo.py):
 @pytest.fixture()
 def isolated_db(tmp_path):

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { EtfCapitalFlowPage } from '../EtfCapitalFlowPage';
 import { UiLanguageProvider } from '../../contexts/UiLanguageContext';
@@ -15,13 +15,24 @@ vi.mock('recharts', () => ({
   CartesianGrid: () => null,
 }));
 
-const { mockGetLatest } = vi.hoisted(() => ({ mockGetLatest: vi.fn() }));
+const { mockGetLatest, mockGetByDate, mockGetRange } = vi.hoisted(() => ({
+  mockGetLatest: vi.fn(),
+  mockGetByDate: vi.fn(),
+  mockGetRange: vi.fn(),
+}));
 vi.mock('../../api/etfCapitalFlow', () => ({
-  etfCapitalFlowApi: { getLatest: mockGetLatest },
+  etfCapitalFlowApi: {
+    getLatest: mockGetLatest,
+    getByDate: mockGetByDate,
+    getRange: mockGetRange,
+  },
 }));
 
 beforeEach(() => {
   mockGetLatest.mockReset();
+  mockGetByDate.mockReset();
+  mockGetRange.mockReset();
+  mockGetRange.mockResolvedValue({ snapshots: [], total: 0 });
   window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, 'zh');
 });
 
@@ -78,5 +89,68 @@ describe('EtfCapitalFlowPage', () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText(/暂无|no data|empty/i)).toBeInTheDocument());
+  });
+
+  it('renders date picker and triggers getByDate on change', async () => {
+    mockGetLatest.mockResolvedValueOnce(sampleSnapshot);
+    mockGetByDate.mockResolvedValueOnce(sampleSnapshot);
+    const { container } = render(
+      <MemoryRouter>
+        <UiLanguageProvider>
+          <EtfCapitalFlowPage />
+        </UiLanguageProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText(/38\.0亿/)).toBeInTheDocument());
+    const dateInput = container.querySelector('input[type="date"]') as HTMLInputElement;
+    expect(dateInput).toBeTruthy();
+    expect(mockGetByDate).not.toHaveBeenCalled();
+    // Simulate user picking a historical date.
+    fireEvent.change(dateInput, { target: { value: '2026-07-10' } });
+    await waitFor(() => expect(mockGetByDate).toHaveBeenCalledWith('2026-07-10'));
+  });
+
+  it('fetches 10-day range for heatmap on mount', async () => {
+    mockGetLatest.mockResolvedValueOnce(sampleSnapshot);
+    render(
+      <MemoryRouter>
+        <UiLanguageProvider>
+          <EtfCapitalFlowPage />
+        </UiLanguageProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(mockGetRange).toHaveBeenCalled());
+    const [startDate, endDate] = mockGetRange.mock.calls[0];
+    // The range window is 10 calendar days: start = today - 9, end = today.
+    const parsedStart = new Date(startDate);
+    const parsedEnd = new Date(endDate);
+    const diffDays = Math.round(
+      (parsedEnd.getTime() - parsedStart.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    expect(diffDays).toBe(9);
+  });
+
+  it('renders EtfBucketDetail section per sector bucket', async () => {
+    const snapshotWithBuckets = {
+      ...sampleSnapshot,
+      sectorBuckets: [
+        { bucketName: '券商', bucketType: 'sector', memberCount: 1, totalScale: 500, netInflowSum: 10 },
+      ],
+      details: [
+        { code: '512000', name: '券商ETF华泰', bucketType: 'sector', bucketName: '券商' },
+      ],
+    };
+    mockGetLatest.mockResolvedValueOnce(snapshotWithBuckets);
+    render(
+      <MemoryRouter>
+        <UiLanguageProvider>
+          <EtfCapitalFlowPage />
+        </UiLanguageProvider>
+      </MemoryRouter>,
+    );
+    // EtfBucketDetail renders the bucketDetail title; the bucket name "券商"
+    // also appears in the KpiBar leading-sector slot, so match the title.
+    await waitFor(() => expect(screen.getAllByText('券商').length).toBeGreaterThanOrEqual(1));
+    expect(screen.getByText('成分明细')).toBeInTheDocument();
   });
 });
