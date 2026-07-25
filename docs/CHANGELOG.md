@@ -70,6 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### 文档
 
 - 在 README 快速开始中补充行情数据源配置说明（`TUSHARE_TOKEN` / Longbridge），明确未配置时仍可使用 AkShare、Baostock、YFinance 等免费兜底源，并同步中英文完整指南。
+- [新功能] ETF 场内资金流分析：每日产出板块轮动 / 宽基动向 / 全市场总览三视角
+- [新功能] ETF 资金流 Web 看板：`/etf-flow` 页面，含热力图与下钻明细
+- [新功能] 大盘复盘报告注入"资金方向（ETF）"段
+- [改进] 复用 `fund_etf_spot_em` 批量接口，单次拉取全市场 ETF 资金流数据
+- [改进] 持久化采用 SQLite JSON 快照，按交易日 upsert
+- [文档] 新增 `docs/etf-capital-flow.md` 用户文档
+- [新功能] ETF 资金流支持手动触发刷新当日快照（POST /api/v1/etf-capital-flow/refresh + Web 看板刷新按钮）
 
 ## [3.25.0] - 2026-07-03
 

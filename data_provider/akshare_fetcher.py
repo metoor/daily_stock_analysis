@@ -1452,7 +1452,91 @@ class AkshareFetcher(BaseFetcher):
             logger.info(f"[API错误] 获取 ETF {stock_code} 实时行情失败: {e}")
             circuit_breaker.record_failure(source_key, str(e))
             return None
-    
+
+    def get_etf_capital_flow_batch(self) -> Dict[str, Any]:
+        """Fetch the full A-share ETF spot batch with capital-flow fields.
+
+        Single call to ak.fund_etf_spot_em() returns ~1500 ETFs with:
+        主力净流入-净额, 基金折价率, 最新份额, 总市值, etc.
+
+        Returns a fail-open block: never raises.
+        """
+        import time as _time
+        import akshare as ak
+        import math
+
+        errors: List[str] = []
+        source_chain: List[Dict[str, Any]] = []
+        df: Optional[pd.DataFrame] = None
+        api_start = _time.time()
+
+        try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+            df = ak.fund_etf_spot_em()
+            elapsed_ms = int((_time.time() - api_start) * 1000)
+            source_chain.append({"provider": "akshare", "result": "ok", "duration_ms": elapsed_ms})
+        except Exception as exc:
+            elapsed_ms = int((_time.time() - api_start) * 1000)
+            source_chain.append({"provider": "akshare", "result": "failed", "duration_ms": elapsed_ms})
+            errors.append(f"akshare fund_etf_spot_em failed: {exc}")
+            return {"status": "failed", "data": [], "source_chain": source_chain, "errors": errors}
+
+        if df is None or df.empty:
+            errors.append("akshare fund_etf_spot_em returned empty frame")
+            return {"status": "failed", "data": [], "source_chain": source_chain, "errors": errors}
+
+        items: List[Dict[str, Any]] = []
+        parse_errors: List[str] = []
+
+        def _parse_float(value: Any) -> Optional[float]:
+            if value is None:
+                return None
+            try:
+                f = float(value)
+                if math.isnan(f) or math.isinf(f):
+                    return None
+                return f
+            except (TypeError, ValueError):
+                return None
+
+        for _, row in df.iterrows():
+            try:
+                code = str(row.get("代码", "")).strip()
+                if not code:
+                    continue
+                name = str(row.get("名称", "")).strip()
+                trade_date_raw = str(row.get("数据日期", "")).strip()
+                trade_date = trade_date_raw[:10] if trade_date_raw else ""
+
+                item = {
+                    "code": code,
+                    "name": name,
+                    "close": _parse_float(row.get("最新价")) or 0.0,
+                    "iopv": _parse_float(row.get("IOPV实时估值")),
+                    "discount_pct": _parse_float(row.get("基金折价率")),
+                    "change_pct": _parse_float(row.get("涨跌幅")) or 0.0,
+                    "volume": _parse_float(row.get("成交量")) or 0.0,
+                    "turnover": _parse_float(row.get("成交额")) or 0.0,
+                    "main_net_inflow": _parse_float(row.get("主力净流入-净额")) or 0.0,
+                    "main_net_inflow_pct": _parse_float(row.get("主力净流入-净占比")),
+                    "latest_shares": _parse_float(row.get("最新份额")),
+                    "total_market_value": _parse_float(row.get("总市值")),
+                    "circulating_market_value": _parse_float(row.get("流通市值")),
+                    "trade_date": trade_date,
+                }
+                items.append(item)
+            except Exception as exc:
+                parse_errors.append(f"row parse failed for code={row.get('代码')}: {exc}")
+
+        status = "ok" if items and not parse_errors else ("partial" if items else "failed")
+        return {
+            "status": status,
+            "data": items,
+            "source_chain": source_chain,
+            "errors": errors + parse_errors,
+        }
+
     def _get_hk_realtime_quote(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
         """
         获取港股实时行情数据

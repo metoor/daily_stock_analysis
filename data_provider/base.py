@@ -3476,6 +3476,51 @@ class DataFetcherManager:
             list(payload.get("errors", [])) + ([err] if err else []),
         )
 
+    def get_etf_capital_flow_context(self) -> Dict[str, Any]:
+        """Fetch the full A-share ETF batch with capital-flow fields.
+
+        Composition: akshare primary (AkshareFetcher), efinance fallback (EfinanceFetcher).
+        Fail-open: never raises.
+        """
+        source_chain: List[Dict[str, Any]] = []
+        errors: List[str] = []
+
+        for provider_name, fetcher in (
+            ("akshare", self._fetchers_by_name.get("AkshareFetcher")),
+            ("efinance", self._fetchers_by_name.get("EfinanceFetcher")),
+        ):
+            if fetcher is None:
+                continue
+            try:
+                block = fetcher.get_etf_capital_flow_batch()
+            except Exception as exc:
+                source_chain.append({"provider": provider_name, "result": "failed", "duration_ms": 0})
+                errors.append(f"{provider_name} raised: {exc}")
+                continue
+            source_chain.extend(block.get("source_chain", []))
+            errors.extend(block.get("errors", []))
+            if block.get("status") == "ok" and block.get("data"):
+                return {
+                    "status": "ok",
+                    "data": block["data"],
+                    "source_chain": source_chain,
+                    "errors": errors,
+                }
+            if block.get("status") == "partial" and block.get("data"):
+                return {
+                    "status": "partial",
+                    "data": block["data"],
+                    "source_chain": source_chain,
+                    "errors": errors,
+                }
+
+        return {
+            "status": "failed",
+            "data": [],
+            "source_chain": source_chain,
+            "errors": errors,
+        }
+
     def get_dragon_tiger_context(self, stock_code: str, budget_seconds: Optional[float] = None) -> Dict[str, Any]:
         """龙虎榜块（fail-open）。"""
         from src.config import get_config

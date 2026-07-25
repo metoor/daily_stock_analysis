@@ -274,6 +274,22 @@ class IntelligenceItem(Base):
     )
 
 
+class EtfCapitalFlowSnapshot(Base):
+    """每日 ETF 资金流分析快照（方案 A 轻量持久化）。"""
+
+    __tablename__ = 'etf_capital_flow_snapshots'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_date = Column(String(10), nullable=False, unique=True, index=True)
+    payload = Column(Text, nullable=False)
+    status = Column(String(32), nullable=False, default='ok', index=True)
+    created_at = Column(DateTime, default=datetime.now, index=True)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, index=True)
+
+    def __repr__(self) -> str:
+        return f"<EtfCapitalFlowSnapshot(trade_date={self.trade_date}, status={self.status})>"
+
+
 class FundamentalSnapshot(Base):
     """
     基本面上下文快照（P0 write-only）。
